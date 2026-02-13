@@ -36,6 +36,19 @@ export function LinksManagerClient({
   const [customerName, setCustomerName] = useState("");
   const [links, setLinks] = useState<LinkRow[]>(initialLinks);
   const [message, setMessage] = useState("");
+  const [lastCreatedUrl, setLastCreatedUrl] = useState<string>("");
+
+  async function copyToClipboard(text: string) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage("Copied link to clipboard");
+    } catch {
+      // Fallback for older browsers / denied clipboard permissions.
+      const ok = window.prompt("Copy this link:", text);
+      if (ok !== null) setMessage("Copy the link from the prompt");
+    }
+  }
 
   const loadLinks = async () => {
     const response = await fetch("/api/admin/links");
@@ -50,6 +63,7 @@ export function LinksManagerClient({
   async function createLink(event: FormEvent) {
     event.preventDefault();
     setMessage("");
+    setLastCreatedUrl("");
     const response = await fetch("/api/admin/links", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -63,7 +77,8 @@ export function LinksManagerClient({
       setMessage(body.error || "Failed to create link");
       return;
     }
-    setMessage(`Created link: ${body.url}`);
+    setLastCreatedUrl(body.url ?? "");
+    setMessage("Created link");
     setCustomerName("");
     await loadLinks();
   }
@@ -84,7 +99,7 @@ export function LinksManagerClient({
   return (
     <div className="grid">
       <form className="card grid" onSubmit={createLink}>
-        <h2 style={{ margin: 0 }}>Create Per-Customer Link</h2>
+        <h2 style={{ margin: 0 }}>Create Customer Order Link</h2>
         <label style={{ display: "grid", gap: 6 }}>
           <span>Catalog Version</span>
           <select
@@ -112,11 +127,30 @@ export function LinksManagerClient({
         <button className="button" disabled={!catalogId}>
           Generate Link
         </button>
-        {message && <div className="muted">{message}</div>}
+        {(message || lastCreatedUrl) && (
+          <div className="muted" style={{ display: "grid", gap: 8 }}>
+            {message ? <div>{message}</div> : null}
+            {lastCreatedUrl ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <a href={lastCreatedUrl} target="_blank" rel="noreferrer">
+                  {lastCreatedUrl}
+                </a>
+                <button
+                  type="button"
+                  className="button secondary"
+                  style={{ padding: "6px 10px" }}
+                  onClick={() => void copyToClipboard(lastCreatedUrl)}
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </form>
 
       <div className="card" style={{ overflowX: "auto" }}>
-        <h2 style={{ marginTop: 0 }}>Customer Links</h2>
+        <h2 style={{ marginTop: 0 }}>Orders</h2>
         <table className="table">
           <thead>
             <tr>
@@ -125,7 +159,7 @@ export function LinksManagerClient({
               <th>Status</th>
               <th>Order</th>
               <th>Updated</th>
-              <th>URL</th>
+              <th>Link</th>
               <th />
             </tr>
           </thead>
@@ -153,9 +187,19 @@ export function LinksManagerClient({
                 </td>
                 <td>
                   {link.url ? (
-                    <a href={link.url} target="_blank" rel="noreferrer">
-                      {link.url}
-                    </a>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <a href={link.url} target="_blank" rel="noreferrer">
+                        {link.url}
+                      </a>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        style={{ padding: "6px 10px" }}
+                        onClick={() => void copyToClipboard(link.url)}
+                      >
+                        Copy
+                      </button>
+                    </div>
                   ) : (
                     <span className="muted">Set APP_BASE_URL for public links</span>
                   )}
