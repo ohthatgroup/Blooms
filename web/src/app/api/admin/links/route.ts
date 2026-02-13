@@ -2,24 +2,12 @@ import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
 import { createCustomerLinkSchema } from "@/lib/validation";
-import { env } from "@/lib/env";
-
-function getBaseUrl(request: Request): string {
-  if (env.APP_BASE_URL && env.APP_BASE_URL !== "http://localhost:3000") {
-    return env.APP_BASE_URL;
-  }
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (host) {
-    return `${proto}://${host}`;
-  }
-  return env.APP_BASE_URL || "http://localhost:3000";
-}
+import { resolveAppBaseUrl } from "@/lib/url";
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
-  const baseUrl = getBaseUrl(request);
+  const baseUrl = resolveAppBaseUrl({ request });
 
   const { data, error } = await auth.admin
     .from("customer_links")
@@ -45,7 +33,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
-  const baseUrl = getBaseUrl(request);
+  const baseUrl = resolveAppBaseUrl({ request });
 
   const payload = await request.json().catch(() => null);
   const parsed = createCustomerLinkSchema.safeParse(payload);

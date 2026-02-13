@@ -36,6 +36,16 @@ interface CatalogSummaryState {
   };
 }
 
+interface ParserJobState {
+  id: string;
+  status: "queued" | "processing" | "success" | "failed";
+  attempts: number;
+  error_log: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const router = useRouter();
   const [items, setItems] = useState<CatalogItemRow[]>([]);
@@ -44,14 +54,17 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const [approvingAll, setApprovingAll] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [catalogSummary, setCatalogSummary] = useState<CatalogSummaryState>({});
+  const [lastParserJob, setLastParserJob] = useState<ParserJobState | null>(null);
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogId]);
 
-  async function load() {
-    setLoading(true);
+  async function load(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      setLoading(true);
+    }
     const [catalogRes, itemsRes] = await Promise.all([
       fetch(`/api/admin/catalogs/${catalogId}`),
       fetch(`/api/admin/catalogs/${catalogId}/items`),
@@ -59,8 +72,11 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     const catalogBody = await catalogRes.json().catch(() => ({}));
     const itemsBody = await itemsRes.json().catch(() => ({}));
     setCatalogSummary(catalogBody.catalog ?? {});
+    setLastParserJob(catalogBody.parserJob ?? null);
     setItems(itemsBody.items ?? []);
-    setLoading(false);
+    if (!options?.silent) {
+      setLoading(false);
+    }
   }
 
   const stats = useMemo(() => {
@@ -71,11 +87,22 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   }, [items]);
 
   const parseSummary = catalogSummary.parse_summary ?? {};
+  const isParserActive =
+    catalogSummary.parse_status === "queued" || catalogSummary.parse_status === "processing";
   const hasDiffSummary =
     typeof parseSummary.new_items === "number" ||
     typeof parseSummary.updated_items === "number" ||
     typeof parseSummary.unchanged_items === "number" ||
     typeof parseSummary.removed_items === "number";
+
+  useEffect(() => {
+    if (!isParserActive) return;
+    const interval = window.setInterval(() => {
+      void load({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isParserActive, catalogId]);
 
   async function updateItem(itemId: string, patch: Record<string, unknown>) {
     const response = await fetch(`/api/admin/catalog-items/${itemId}`, {
@@ -181,6 +208,11 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
               {parseSummary.removed_items ?? 0}
             </div>
           )}
+          {isParserActive && (
+            <div className="muted" style={{ marginTop: 6 }}>
+              Parser is running. This page auto-refreshes every 5 seconds.
+            </div>
+          )}
         </div>
         <div style={{ display: "grid", alignContent: "start", gap: 8 }}>
           <button
@@ -196,12 +228,34 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
           <button className="button secondary" onClick={deleteCatalog} disabled={deleting}>
             {deleting ? "Deleting..." : "Delete Catalog"}
           </button>
-          <button className="button secondary" onClick={load}>
+          <button className="button secondary" onClick={() => void load()}>
             Refresh
           </button>
         </div>
       </div>
       {statusText && <div className="card">{statusText}</div>}
+      {lastParserJob && (
+        <div className="card">
+          <div>
+            Last parser job: <strong>{lastParserJob.status}</strong> | Attempts:{" "}
+            {lastParserJob.attempts}
+          </div>
+          <div className="muted" style={{ marginTop: 4 }}>
+            Queued: {new Date(lastParserJob.created_at).toLocaleString()}
+            {lastParserJob.started_at
+              ? ` | Started: ${new Date(lastParserJob.started_at).toLocaleString()}`
+              : ""}
+            {lastParserJob.finished_at
+              ? ` | Finished: ${new Date(lastParserJob.finished_at).toLocaleString()}`
+              : ""}
+          </div>
+          {lastParserJob.error_log && (
+            <div className="pill red" style={{ marginTop: 8 }}>
+              {lastParserJob.error_log}
+            </div>
+          )}
+        </div>
+      )}
       <div className="card" style={{ overflowX: "auto" }}>
         <table className="table">
           <thead>

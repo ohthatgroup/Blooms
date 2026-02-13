@@ -9,6 +9,11 @@ interface OrderClientProps {
   linkCustomerName: string;
   catalogLabel: string;
   products: ProductForOrder[];
+  initialLiveOrder: {
+    id: string;
+    customer_name: string;
+    items: Array<{ sku: string; qty: number }>;
+  } | null;
 }
 
 export function OrderClient({
@@ -16,11 +21,22 @@ export function OrderClient({
   linkCustomerName,
   catalogLabel,
   products,
+  initialLiveOrder,
 }: OrderClientProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");
-  const [customerName, setCustomerName] = useState(linkCustomerName);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [customerName, setCustomerName] = useState(
+    initialLiveOrder?.customer_name ?? linkCustomerName,
+  );
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    const seeded: Record<string, number> = {};
+    for (const item of initialLiveOrder?.items ?? []) {
+      if (item.qty > 0) {
+        seeded[item.sku] = item.qty;
+      }
+    }
+    return seeded;
+  });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showReview, setShowReview] = useState(false);
@@ -114,7 +130,11 @@ export function OrderClient({
     link.download = body.file_name;
     link.click();
     URL.revokeObjectURL(objectUrl);
-    setMessage("Order submitted and CSV downloaded.");
+    setMessage(
+      body.updated
+        ? "Order updated and CSV downloaded."
+        : "Order submitted and CSV downloaded.",
+    );
     setShowReview(false);
   }
 

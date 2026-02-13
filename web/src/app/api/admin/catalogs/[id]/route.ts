@@ -34,7 +34,9 @@ export async function GET(
         .eq("approved", true),
       auth.admin
         .from("parser_jobs")
-        .select("id,status,error_log,created_at,started_at,finished_at")
+        .select(
+          "id,status,attempts,error_log,created_at,started_at,finished_at,total_items,reused_items,queued_items,processed_items,failed_items,progress_percent,progress_label,parsed_pages,total_pages",
+        )
         .eq("catalog_id", id)
         .order("created_at", { ascending: false })
         .limit(1)

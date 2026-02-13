@@ -25,6 +25,10 @@ export interface Catalog {
   created_by: string;
   created_at: string;
   published_at: string | null;
+  baseline_catalog_id?: string | null;
+  pdf_sha256?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
 }
 
 export interface CatalogItem {
@@ -38,6 +42,9 @@ export interface CatalogItem {
   image_storage_path: string;
   parse_issues: string[];
   approved: boolean;
+  signature?: string;
+  quick_fingerprint?: string | null;
+  change_type?: "new" | "updated" | "unchanged";
   updated_at: string;
 }
 
@@ -61,6 +68,8 @@ export interface Order {
   total_skus: number;
   total_cases: number;
   csv_storage_path: string | null;
+  is_live?: boolean;
+  updated_at?: string;
 }
 
 export interface OrderItem {
@@ -83,6 +92,15 @@ export interface ParserJob {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  total_items?: number;
+  reused_items?: number;
+  queued_items?: number;
+  processed_items?: number;
+  failed_items?: number;
+  progress_percent?: number;
+  progress_label?: string;
+  parsed_pages?: number | null;
+  total_pages?: number | null;
 }
 
 export interface ProductForOrder {
@@ -93,4 +111,3 @@ export interface ProductForOrder {
   category: string;
   imageUrl: string;
 }
-

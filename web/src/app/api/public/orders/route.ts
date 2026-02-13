@@ -17,16 +17,9 @@ export async function POST(request: Request) {
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const limitResult = await enforcePublicRateLimit(
-    `${parsed.data.token}:${ip}`,
-  );
+  const limitResult = await enforcePublicRateLimit(`${parsed.data.token}:${ip}`);
   if (!limitResult.success) {
-    return NextResponse.json(
-      { error: "Too many requests" },
-      {
-        status: 429,
-      },
-    );
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const admin = createSupabaseAdminClient();
@@ -77,79 +70,120 @@ export async function POST(request: Request) {
   }
 
   const orderItems = parsed.data.items.map((entry) => {
-    const p = productBySku.get(entry.sku)!;
+    const product = productBySku.get(entry.sku)!;
     return {
-      sku: p.sku,
-      product_name: p.name,
-      upc: p.upc ?? "",
-      pack: p.pack ?? "",
-      category: p.category,
+      sku: product.sku,
+      product_name: product.name,
+      upc: product.upc ?? "",
+      pack: product.pack ?? "",
+      category: product.category,
       qty: entry.qty,
     };
   });
 
   const totalSkus = orderItems.length;
   const totalCases = orderItems.reduce((sum, x) => sum + x.qty, 0);
+  const now = new Date().toISOString();
 
-  const { data: order, error: orderError } = await admin
+  const { data: liveOrder, error: liveOrderError } = await admin
     .from("orders")
-    .insert({
-      customer_link_id: link.id,
-      catalog_id: link.catalog_id,
-      customer_name: parsed.data.customer_name,
-      submitted_at: new Date().toISOString(),
-      total_skus: totalSkus,
-      total_cases: totalCases,
-    })
     .select("id")
-    .single();
+    .eq("customer_link_id", link.id)
+    .eq("catalog_id", link.catalog_id)
+    .eq("is_live", true)
+    .maybeSingle();
 
-  if (orderError || !order) {
+  if (liveOrderError) {
     return NextResponse.json(
-      { error: "Failed to create order", details: orderError?.message },
+      { error: "Failed to load existing order", details: liveOrderError.message },
       { status: 500 },
     );
   }
 
-  const { error: itemInsertError } = await admin.from("order_items").insert(
-    orderItems.map((item) => ({
-      ...item,
-      order_id: order.id,
-    })),
+  let orderId = liveOrder?.id ?? "";
+  const updated = Boolean(liveOrder);
+  if (liveOrder) {
+    const { error: updateOrderError } = await admin
+      .from("orders")
+      .update({
+        customer_name: parsed.data.customer_name,
+        submitted_at: now,
+        total_skus: totalSkus,
+        total_cases: totalCases,
+        updated_at: now,
+      })
+      .eq("id", liveOrder.id);
+
+    if (updateOrderError) {
+      return NextResponse.json(
+        { error: "Failed to update order", details: updateOrderError.message },
+        { status: 500 },
+      );
+    }
+  } else {
+    const { data: createdOrder, error: createOrderError } = await admin
+      .from("orders")
+      .insert({
+        customer_link_id: link.id,
+        catalog_id: link.catalog_id,
+        customer_name: parsed.data.customer_name,
+        submitted_at: now,
+        total_skus: totalSkus,
+        total_cases: totalCases,
+        is_live: true,
+        updated_at: now,
+      })
+      .select("id")
+      .single();
+
+    if (createOrderError || !createdOrder) {
+      return NextResponse.json(
+        { error: "Failed to create order", details: createOrderError?.message },
+        { status: 500 },
+      );
+    }
+    orderId = createdOrder.id;
+  }
+
+  if (!orderId) {
+    return NextResponse.json({ error: "Order id missing" }, { status: 500 });
+  }
+
+  await admin.from("order_items").delete().eq("order_id", orderId);
+  const { error: insertItemsError } = await admin.from("order_items").insert(
+    orderItems.map((item) => ({ ...item, order_id: orderId })),
   );
 
-  if (itemInsertError) {
+  if (insertItemsError) {
     return NextResponse.json(
-      { error: "Failed to save order items", details: itemInsertError.message },
+      { error: "Failed to save order items", details: insertItemsError.message },
       { status: 500 },
     );
   }
 
   const { csv, fileName } = buildOrderCsv({
     customerName: parsed.data.customer_name,
-    items: orderItems.map((i) => ({
-      sku: i.sku,
-      name: i.product_name,
-      upc: i.upc,
-      pack: i.pack,
-      category: i.category,
-      qty: i.qty,
+    items: orderItems.map((item) => ({
+      sku: item.sku,
+      name: item.product_name,
+      upc: item.upc,
+      pack: item.pack,
+      category: item.category,
+      qty: item.qty,
     })),
   });
 
-  const csvStoragePath = await uploadOrderCsv({ orderId: order.id, csv });
-  if (csvStoragePath) {
-    await admin
-      .from("orders")
-      .update({ csv_storage_path: csvStoragePath })
-      .eq("id", order.id);
-  }
+  const csvStoragePath = await uploadOrderCsv({ orderId, csv });
+  await admin
+    .from("orders")
+    .update({ csv_storage_path: csvStoragePath, updated_at: now })
+    .eq("id", orderId);
 
   return NextResponse.json({
-    order_id: order.id,
+    order_id: orderId,
+    updated,
     file_name: fileName,
     csv,
     csv_storage_path: csvStoragePath,
   });
 }
-

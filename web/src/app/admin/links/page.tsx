@@ -2,11 +2,14 @@ import { requireAdminPage } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { AdminNav } from "@/components/admin-nav";
 import { LinksManagerClient } from "@/components/admin/links-manager-client";
-import { env } from "@/lib/env";
+import { resolveAppBaseUrl } from "@/lib/url";
+import { headers } from "next/headers";
 
 export default async function AdminLinksPage() {
   await requireAdminPage();
   const admin = createSupabaseAdminClient();
+  const headerStore = await headers();
+  const baseUrl = resolveAppBaseUrl({ headers: headerStore });
   const { data: catalogs } = await admin
     .from("catalogs")
     .select("id,version_label")
@@ -21,7 +24,7 @@ export default async function AdminLinksPage() {
   const initialLinks = (links ?? []).map((link) => ({
     ...link,
     catalogs: Array.isArray(link.catalogs) ? link.catalogs[0] : link.catalogs,
-    url: `${env.APP_BASE_URL}/o/${link.token}`,
+    url: `${baseUrl}/o/${link.token}`,
   }));
 
   return (

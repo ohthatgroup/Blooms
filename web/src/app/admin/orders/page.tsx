@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdminPage } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { AdminNav } from "@/components/admin-nav";
@@ -9,8 +10,9 @@ export default async function AdminOrdersPage() {
   const { data: orders } = await admin
     .from("orders")
     .select(
-      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,customer_links(token),catalogs(version_label)",
+      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,is_live,customer_links(token),catalogs(version_label)",
     )
+    .eq("is_live", true)
     .order("submitted_at", { ascending: false })
     .limit(300);
 
@@ -29,6 +31,7 @@ export default async function AdminOrdersPage() {
               <th>Cases</th>
               <th>Link Token</th>
               <th>CSV</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -57,6 +60,11 @@ export default async function AdminOrdersPage() {
                     {Array.isArray(linkRel) ? linkRel[0]?.token : linkRel?.token}
                   </td>
                   <td>{order.csv_storage_path ?? "-"}</td>
+                  <td>
+                    <Link className="button secondary" href={`/admin/orders/${order.id}`}>
+                      Edit
+                    </Link>
+                  </td>
                 </tr>
               );
             })}

@@ -57,6 +57,23 @@ export async function GET(
       : "",
   }));
 
+  const { data: liveOrder } = await admin
+    .from("orders")
+    .select("id,customer_name")
+    .eq("customer_link_id", link.id)
+    .eq("catalog_id", link.catalog_id)
+    .eq("is_live", true)
+    .maybeSingle();
+
+  let liveOrderItems: Array<{ sku: string; qty: number }> = [];
+  if (liveOrder) {
+    const { data: rows } = await admin
+      .from("order_items")
+      .select("sku,qty")
+      .eq("order_id", liveOrder.id);
+    liveOrderItems = (rows ?? []).map((row) => ({ sku: row.sku, qty: row.qty }));
+  }
+
   return NextResponse.json({
     link: {
       id: link.id,
@@ -68,6 +85,12 @@ export async function GET(
       version_label: catalog.version_label,
     },
     products,
+    live_order: liveOrder
+      ? {
+          id: liveOrder.id,
+          customer_name: liveOrder.customer_name,
+          items: liveOrderItems,
+        }
+      : null,
   });
 }
-

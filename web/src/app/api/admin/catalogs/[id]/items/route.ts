@@ -12,7 +12,7 @@ export async function GET(
   const { id } = await context.params;
   const { data: catalog, error: catalogError } = await auth.admin
     .from("catalogs")
-    .select("id")
+    .select("id,parse_status,parse_summary")
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -26,6 +26,14 @@ export async function GET(
 
   if (!catalog) {
     return NextResponse.json({ error: "Catalog not found" }, { status: 404 });
+  }
+
+  if (catalog.parse_status === "queued" || catalog.parse_status === "processing") {
+    return NextResponse.json({
+      items: [],
+      parse_active: true,
+      parse_summary: catalog.parse_summary ?? {},
+    });
   }
 
   const { data, error } = await auth.admin

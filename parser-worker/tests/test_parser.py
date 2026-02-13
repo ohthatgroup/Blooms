@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from parser import category_from_sku, parse_catalog_pdf
+from parser import category_from_sku, parse_catalog_pdf, scan_catalog_fast
 
 
 def _find_fixture() -> Path | None:
@@ -50,3 +50,27 @@ def test_parse_catalog_fixture_name_pack_regressions(fixture_items):
 
     assert by_sku["BLM489"].name == "Whole Grain Animal Crackers"
     assert by_sku["BLM489"].pack == "12/10oz"
+
+
+def test_scan_catalog_fast_produces_candidates():
+    fixture = _find_fixture()
+    if fixture is None:
+        pytest.skip("Fixture catalog PDF not found")
+
+    candidates = scan_catalog_fast(fixture)
+    assert len(candidates) >= 858
+    unique_skus = {c.sku for c in candidates}
+    assert len(unique_skus) == 858
+    assert any(c.sku == "BLM375" for c in candidates)
+
+
+def test_parse_catalog_pdf_sku_filter():
+    fixture = _find_fixture()
+    if fixture is None:
+        pytest.skip("Fixture catalog PDF not found")
+
+    filtered = parse_catalog_pdf(fixture, sku_filter={"BLM375", "ONG1020"})
+    by_sku = {x.sku: x for x in filtered}
+    assert set(by_sku.keys()) == {"BLM375", "ONG1020"}
+    assert by_sku["BLM375"].name == "Candy Corn Bulk 30lb"
+    assert by_sku["ONG1020"].pack == "12/3oz"
