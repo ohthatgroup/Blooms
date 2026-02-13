@@ -1,0 +1,51 @@
+name: Parser Worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+concurrency:
+  group: parser-worker
+  cancel-in-progress: false
+
+jobs:
+  process-parser-jobs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: parser-worker
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PARSER_POLL_SECONDS: "10"
+      PARSER_LOG_LEVEL: "INFO"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Process parser queue
+        run: |
+          python - <<'PY'
+          import worker
+
+          # Process up to 5 queued jobs per workflow run.
+          processed = 0
+          for _ in range(5):
+            if not worker.run_once():
+              break
+            processed += 1
+
+          print(f"Processed jobs: {processed}")
+          PY
+

@@ -46,7 +46,10 @@ export function CatalogUploadPanel() {
       return;
     }
 
-    setMessage(`Catalog queued for parsing: ${body.catalog_id}`);
+    const workflow = body.parser_triggered
+      ? "Parser started."
+      : `Parser not auto-triggered: ${body.parser_trigger_message || "run parser manually"}`;
+    setMessage(`Catalog queued: ${body.catalog_id}. ${workflow}`);
     setVersionLabel("");
     setFile(null);
     window.location.reload();
@@ -82,4 +85,3 @@ export function CatalogUploadPanel() {
     </form>
   );
 }
-

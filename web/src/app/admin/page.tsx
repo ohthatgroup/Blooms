@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { CatalogUploadPanel } from "@/components/admin/catalog-upload-panel";
 import { AdminNav } from "@/components/admin-nav";
 import { SignOutButton } from "@/components/signout-button";
+import { TriggerParserButton } from "@/components/admin/trigger-parser-button";
 
 export default async function AdminPage() {
   await requireAdminPage();
@@ -18,7 +19,8 @@ export default async function AdminPage() {
   return (
     <div className="container grid">
       <AdminNav />
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <TriggerParserButton />
         <SignOutButton />
       </div>
       <CatalogUploadPanel />
@@ -64,4 +66,3 @@ export default async function AdminPage() {
     </div>
   );
 }
-

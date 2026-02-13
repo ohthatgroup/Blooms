@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
+import { triggerParserWorkflow } from "@/lib/github-actions";
 import { createCatalogSchema } from "@/lib/validation";
 
 export async function GET() {
@@ -69,6 +70,17 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ catalog_id: catalog.id }, { status: 201 });
-}
+  const workflowResult = await triggerParserWorkflow({
+    reason: "catalog_uploaded",
+    catalogId: catalog.id,
+  });
 
+  return NextResponse.json(
+    {
+      catalog_id: catalog.id,
+      parser_triggered: workflowResult.triggered,
+      parser_trigger_message: workflowResult.message,
+    },
+    { status: 201 },
+  );
+}

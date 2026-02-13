@@ -1,5 +1,11 @@
 create extension if not exists "pgcrypto";
 
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text not null default 'admin' check (role in ('admin')),
+  created_at timestamptz not null default now()
+);
+
 create or replace function public.is_admin(uid uuid)
 returns boolean
 language sql
@@ -12,12 +18,6 @@ as $$
       and p.role = 'admin'
   );
 $$;
-
-create table if not exists public.profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null default 'admin' check (role in ('admin')),
-  created_at timestamptz not null default now()
-);
 
 create or replace function public.handle_new_user_profile()
 returns trigger
@@ -239,4 +239,3 @@ for all
 to authenticated
 using (bucket_id = 'order-csv' and public.is_admin(auth.uid()))
 with check (bucket_id = 'order-csv' and public.is_admin(auth.uid()));
-
