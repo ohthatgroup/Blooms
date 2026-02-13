@@ -4,9 +4,22 @@ import { requireAdminApi } from "@/lib/auth";
 import { createCustomerLinkSchema } from "@/lib/validation";
 import { env } from "@/lib/env";
 
-export async function GET() {
+function getBaseUrl(request: Request): string {
+  if (env.APP_BASE_URL && env.APP_BASE_URL !== "http://localhost:3000") {
+    return env.APP_BASE_URL;
+  }
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return env.APP_BASE_URL || "http://localhost:3000";
+}
+
+export async function GET(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+  const baseUrl = getBaseUrl(request);
 
   const { data, error } = await auth.admin
     .from("customer_links")
@@ -24,7 +37,7 @@ export async function GET() {
 
   const links = (data ?? []).map((link) => ({
     ...link,
-    url: `${env.APP_BASE_URL}/o/${link.token}`,
+    url: `${baseUrl}/o/${link.token}`,
   }));
   return NextResponse.json({ links });
 }
@@ -32,6 +45,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await requireAdminApi();
   if (!auth.ok) return auth.response;
+  const baseUrl = getBaseUrl(request);
 
   const payload = await request.json().catch(() => null);
   const parsed = createCustomerLinkSchema.safeParse(payload);
@@ -66,9 +80,8 @@ export async function POST(request: Request) {
     {
       link_id: data.id,
       token: data.token,
-      url: `${env.APP_BASE_URL}/o/${data.token}`,
+      url: `${baseUrl}/o/${data.token}`,
     },
     { status: 201 },
   );
 }
-
