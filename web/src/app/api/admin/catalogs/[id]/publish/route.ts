@@ -12,12 +12,19 @@ export async function POST(
 
   const { data: catalog, error: catalogError } = await auth.admin
     .from("catalogs")
-    .select("id,status,parse_status")
+    .select("id,status,parse_status,deleted_at")
     .eq("id", id)
     .single();
 
   if (catalogError || !catalog) {
     return NextResponse.json({ error: "Catalog not found" }, { status: 404 });
+  }
+
+  if (catalog.deleted_at) {
+    return NextResponse.json(
+      { error: "Catalog is archived and cannot be published" },
+      { status: 400 },
+    );
   }
 
   const { data: pendingItems, error: itemsError } = await auth.admin
@@ -63,4 +70,3 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
-

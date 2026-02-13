@@ -10,6 +10,23 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const { id } = await context.params;
+  const { data: catalog, error: catalogError } = await auth.admin
+    .from("catalogs")
+    .select("id")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (catalogError) {
+    return NextResponse.json(
+      { error: "Failed to load catalog", details: catalogError.message },
+      { status: 500 },
+    );
+  }
+
+  if (!catalog) {
+    return NextResponse.json({ error: "Catalog not found" }, { status: 404 });
+  }
 
   const { data, error } = await auth.admin
     .from("catalog_items")
@@ -34,4 +51,3 @@ export async function GET(
 
   return NextResponse.json({ items });
 }
-

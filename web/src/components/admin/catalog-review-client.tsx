@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface CatalogReviewClientProps {
@@ -19,17 +20,30 @@ interface CatalogItemRow {
   image_url: string;
   parse_issues: string[];
   approved: boolean;
+  change_type?: "new" | "updated" | "unchanged";
+}
+
+interface CatalogSummaryState {
+  version_label?: string;
+  parse_status?: string;
+  status?: string;
+  parse_summary?: {
+    new_items?: number;
+    updated_items?: number;
+    unchanged_items?: number;
+    removed_items?: number;
+    baseline_catalog_id?: string | null;
+  };
 }
 
 export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
+  const router = useRouter();
   const [items, setItems] = useState<CatalogItemRow[]>([]);
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(true);
-  const [catalogSummary, setCatalogSummary] = useState<{
-    version_label?: string;
-    parse_status?: string;
-    status?: string;
-  }>({});
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [catalogSummary, setCatalogSummary] = useState<CatalogSummaryState>({});
 
   useEffect(() => {
     void load();
@@ -55,6 +69,13 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     const missingImage = items.filter((x) => !x.image_storage_path).length;
     return { total, approved, missingImage };
   }, [items]);
+
+  const parseSummary = catalogSummary.parse_summary ?? {};
+  const hasDiffSummary =
+    typeof parseSummary.new_items === "number" ||
+    typeof parseSummary.updated_items === "number" ||
+    typeof parseSummary.unchanged_items === "number" ||
+    typeof parseSummary.removed_items === "number";
 
   async function updateItem(itemId: string, patch: Record<string, unknown>) {
     const response = await fetch(`/api/admin/catalog-items/${itemId}`, {
@@ -101,6 +122,43 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     await load();
   }
 
+  async function approveAllItems() {
+    setApprovingAll(true);
+    const response = await fetch(`/api/admin/catalogs/${catalogId}/approve-all`, {
+      method: "POST",
+    });
+    const body = await response.json().catch(() => ({}));
+    setApprovingAll(false);
+    if (!response.ok) {
+      setStatusText(body.error || "Approve all failed");
+      return;
+    }
+    setStatusText(`Approved ${body.updatedCount ?? 0} items`);
+    await load();
+  }
+
+  async function deleteCatalog() {
+    const confirmed = window.confirm(
+      "Archive this catalog? It will be hidden and all links for it will be disabled.",
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    const response = await fetch(`/api/admin/catalogs/${catalogId}`, {
+      method: "DELETE",
+    });
+    const body = await response.json().catch(() => ({}));
+    setDeleting(false);
+
+    if (!response.ok) {
+      setStatusText(body.error || "Delete failed");
+      return;
+    }
+
+    router.push("/admin");
+    router.refresh();
+  }
+
   if (loading) {
     return <div className="card">Loading catalog review...</div>;
   }
@@ -111,11 +169,18 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
         <div>
           <h2 style={{ margin: 0 }}>{catalogSummary.version_label ?? "Catalog"}</h2>
           <div className="muted" style={{ marginTop: 6 }}>
-            Status: {catalogSummary.status} • Parse: {catalogSummary.parse_status}
+            Status: {catalogSummary.status} | Parse: {catalogSummary.parse_status}
           </div>
           <div className="muted" style={{ marginTop: 6 }}>
-            {stats.approved}/{stats.total} approved • {stats.missingImage} missing images
+            {stats.approved}/{stats.total} approved | {stats.missingImage} missing images
           </div>
+          {hasDiffSummary && (
+            <div className="muted" style={{ marginTop: 6 }}>
+              New: {parseSummary.new_items ?? 0} | Updated: {parseSummary.updated_items ?? 0} |
+              Unchanged: {parseSummary.unchanged_items ?? 0} | Removed:{" "}
+              {parseSummary.removed_items ?? 0}
+            </div>
+          )}
         </div>
         <div style={{ display: "grid", alignContent: "start", gap: 8 }}>
           <button
@@ -124,6 +189,12 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
             disabled={stats.total === 0 || stats.approved !== stats.total || stats.missingImage > 0}
           >
             Publish Catalog
+          </button>
+          <button className="button secondary" onClick={approveAllItems} disabled={approvingAll}>
+            {approvingAll ? "Approving..." : "Approve All Items"}
+          </button>
+          <button className="button secondary" onClick={deleteCatalog} disabled={deleting}>
+            {deleting ? "Deleting..." : "Delete Catalog"}
           </button>
           <button className="button secondary" onClick={load}>
             Refresh
@@ -141,6 +212,7 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
               <th>UPC</th>
               <th>Pack</th>
               <th>Category</th>
+              <th>Change</th>
               <th>Issues</th>
               <th>Approved</th>
             </tr>
@@ -229,6 +301,11 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                     }
                     onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
                   />
+                </td>
+                <td>
+                  <span className={`pill ${item.change_type === "unchanged" ? "green" : "red"}`}>
+                    {item.change_type ?? "new"}
+                  </span>
                 </td>
                 <td style={{ maxWidth: 180 }}>
                   {(item.parse_issues ?? []).length ? (

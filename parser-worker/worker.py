@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import tempfile
@@ -74,6 +75,70 @@ def _safe_filename(name: str) -> str:
     return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in name)
 
 
+def _normalize_text(value: str | None) -> str:
+    if value is None:
+        return ""
+    return " ".join(value.strip().lower().split())
+
+
+def _sha256_hex(value: bytes | str) -> str:
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return hashlib.sha256(value).hexdigest()
+
+
+def _item_signature(
+    sku: str,
+    name: str,
+    upc: str | None,
+    pack: str | None,
+    category: str,
+    image_hash: str,
+) -> str:
+    payload = "|".join(
+        [
+            _normalize_text(sku),
+            _normalize_text(name),
+            _normalize_text(upc),
+            _normalize_text(pack),
+            _normalize_text(category),
+            image_hash,
+        ]
+    )
+    return _sha256_hex(payload)
+
+
+def _load_baseline_catalog_id(client: Client, catalog_id: str) -> str | None:
+    result = (
+        client.table("catalogs")
+        .select("id")
+        .eq("status", "published")
+        .is_("deleted_at", "null")
+        .neq("id", catalog_id)
+        .order("published_at", desc=True)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        return None
+    return rows[0]["id"]
+
+
+def _load_baseline_items(client: Client, baseline_catalog_id: str | None) -> dict[str, dict]:
+    if not baseline_catalog_id:
+        return {}
+    result = (
+        client.table("catalog_items")
+        .select("sku,name,upc,pack,category,image_storage_path,signature")
+        .eq("catalog_id", baseline_catalog_id)
+        .execute()
+    )
+    rows = result.data or []
+    return {row["sku"]: row for row in rows}
+
+
 def process_job(client: Client, job: dict):
     job_id = job["id"]
     catalog_id = job["catalog_id"]
@@ -101,9 +166,64 @@ def process_job(client: Client, job: dict):
             tmp_pdf.write_bytes(file_bytes)
             parsed_items = parse_catalog_pdf(tmp_pdf)
 
+            baseline_catalog_id = _load_baseline_catalog_id(client, catalog_id)
+            baseline_items = _load_baseline_items(client, baseline_catalog_id)
+            baseline_skus = set(baseline_items.keys())
+            parsed_skus: set[str] = set()
+
             missing_images = 0
             unknown_categories = 0
+            new_items = 0
+            updated_items = 0
+            unchanged_items = 0
+            row_payload: list[dict] = []
+
             for item in parsed_items:
+                parsed_skus.add(item.sku)
+
+                image_hash = _sha256_hex(item.image_bytes) if item.image_bytes else ""
+                signature = _item_signature(
+                    sku=item.sku,
+                    name=item.name,
+                    upc=item.upc,
+                    pack=item.pack,
+                    category=item.category,
+                    image_hash=image_hash,
+                )
+
+                baseline = baseline_items.get(item.sku)
+                baseline_signature = baseline.get("signature") if baseline else ""
+                is_unchanged = bool(baseline and baseline_signature and baseline_signature == signature)
+
+                if is_unchanged:
+                    unchanged_items += 1
+                    image_storage_path = baseline.get("image_storage_path", "")
+                    if not image_storage_path:
+                        missing_images += 1
+                    row_payload.append(
+                        {
+                            "catalog_id": catalog_id,
+                            "sku": item.sku,
+                            "name": baseline.get("name") or item.name,
+                            "upc": baseline.get("upc"),
+                            "pack": baseline.get("pack"),
+                            "category": baseline.get("category") or item.category,
+                            "image_storage_path": image_storage_path,
+                            "parse_issues": [],
+                            "approved": True,
+                            "signature": signature,
+                            "change_type": "unchanged",
+                        }
+                    )
+                    continue
+
+                if baseline:
+                    updated_items += 1
+                    change_type = "updated"
+                else:
+                    new_items += 1
+                    change_type = "new"
+
                 image_storage_path = ""
                 if item.image_bytes:
                     ext = item.image_extension or "jpg"
@@ -121,7 +241,7 @@ def process_job(client: Client, job: dict):
                 if "unknown_category" in item.parse_issues:
                     unknown_categories += 1
 
-                client.table("catalog_items").upsert(
+                row_payload.append(
                     {
                         "catalog_id": catalog_id,
                         "sku": item.sku,
@@ -132,17 +252,39 @@ def process_job(client: Client, job: dict):
                         "image_storage_path": image_storage_path,
                         "parse_issues": item.parse_issues,
                         "approved": False,
-                    },
+                        "signature": signature,
+                        "change_type": change_type,
+                    }
+                )
+
+            # Re-runs for the same catalog should replace item rows with current parse output.
+            client.table("catalog_items").delete().eq("catalog_id", catalog_id).execute()
+
+            if row_payload:
+                client.table("catalog_items").upsert(
+                    row_payload,
                     on_conflict="catalog_id,sku",
                 ).execute()
 
+        removed_items = len(baseline_skus - parsed_skus)
+
         summary = {
             "total_items": len(parsed_items),
+            "new_items": new_items,
+            "updated_items": updated_items,
+            "unchanged_items": unchanged_items,
+            "removed_items": removed_items,
             "missing_images": missing_images,
             "unknown_categories": unknown_categories,
+            "baseline_catalog_id": baseline_catalog_id,
         }
         client.table("catalogs").update(
-            {"parse_status": "needs_review", "status": "draft", "parse_summary": summary}
+            {
+                "parse_status": "needs_review",
+                "status": "draft",
+                "parse_summary": summary,
+                "baseline_catalog_id": baseline_catalog_id,
+            }
         ).eq("id", catalog_id).execute()
 
         client.table("parser_jobs").update(
@@ -183,4 +325,3 @@ def run_forever():
 
 if __name__ == "__main__":
     run_forever()
-

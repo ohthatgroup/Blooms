@@ -49,6 +49,7 @@ HEADER_LINES = {
 
 SKU_RE = re.compile(r"^[A-Z][A-Z0-9\-/]{2,}\d{2,}$")
 PACK_HINT_RE = re.compile(r"(\d+\s*/\s*[\w.\- ]+)|(oz|gr|g|lb|pc)", re.I)
+STRONG_PACK_RE = re.compile(r"\d+\s*[/-]\s*[\w.\- ]+", re.I)
 
 
 @dataclass
@@ -83,6 +84,10 @@ def _is_pack_line(text: str) -> bool:
     return bool(PACK_HINT_RE.search(text))
 
 
+def _is_strong_pack_line(text: str) -> bool:
+    return bool(STRONG_PACK_RE.search(text))
+
+
 def _line_text_from_words(words: list[dict[str, Any]]) -> list[str]:
     lines: list[list[Any]] = []
     for w in sorted(words, key=lambda row: (round(row["top"], 1), row["x0"])):
@@ -103,25 +108,58 @@ def _parse_fields_from_lines(sku: str, lines: list[str]) -> tuple[str, str | Non
             break
     after = lines[sku_index + 1 :]
 
-    name_parts: list[str] = []
     upc: str | None = None
-    pack: str | None = None
+    upc_index: int | None = None
 
-    for line in after:
-        if upc is None and _is_upc_line(line) and not _is_pack_line(line):
+    for idx, line in enumerate(after):
+        if _is_upc_line(line) and not _is_pack_line(line):
             upc = _digits_only(line)
-            continue
-        if pack is None and _is_pack_line(line):
-            pack = line
-            continue
-        name_parts.append(line)
+            upc_index = idx
+            break
 
-    # Fallback: if no pack found and trailing line exists, treat last as pack.
-    if pack is None and len(name_parts) > 1:
-        maybe_pack = name_parts[-1]
-        if _is_pack_line(maybe_pack):
-            pack = maybe_pack
-            name_parts = name_parts[:-1]
+    pack_index: int | None = None
+    pack: str | None = None
+    pack_candidates: list[int] = []
+    for idx, line in enumerate(after):
+        if _is_pack_line(line):
+            pack_candidates.append(idx)
+
+    if pack_candidates:
+        if upc_index is not None:
+            after_upc = [idx for idx in pack_candidates if idx > upc_index]
+            before_upc = [idx for idx in pack_candidates if idx < upc_index]
+            for group in (after_upc, before_upc):
+                strong = [idx for idx in group if _is_strong_pack_line(after[idx])]
+                if strong:
+                    pack_index = strong[0]
+                    break
+            if pack_index is None:
+                if after_upc:
+                    pack_index = after_upc[0]
+                else:
+                    pack_index = pack_candidates[0]
+        else:
+            strong = [idx for idx in pack_candidates if _is_strong_pack_line(after[idx])]
+            pack_index = strong[0] if strong else pack_candidates[0]
+
+    if pack_index is not None:
+        pack = after[pack_index]
+
+    before_upc_name_parts: list[str] = []
+    generic_name_parts: list[str] = []
+    for idx, line in enumerate(after):
+        if upc_index is not None and idx == upc_index:
+            continue
+        if pack_index is not None and idx == pack_index:
+            continue
+        generic_name_parts.append(line)
+        if upc_index is not None and idx < upc_index:
+            before_upc_name_parts.append(line)
+
+    if before_upc_name_parts:
+        name_parts = before_upc_name_parts
+    else:
+        name_parts = generic_name_parts
 
     name = " ".join(name_parts).strip()
     if not name:
@@ -238,4 +276,3 @@ def parse_catalog_pdf(pdf_path: str | Path) -> list[ParsedItem]:
             if item.sku not in unique:
                 unique[item.sku] = item
         return list(unique.values())
-

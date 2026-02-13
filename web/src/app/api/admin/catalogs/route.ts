@@ -12,6 +12,7 @@ export async function GET() {
     .select(
       "id,version_label,status,parse_status,parse_summary,created_at,published_at",
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
