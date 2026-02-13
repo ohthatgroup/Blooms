@@ -250,6 +250,9 @@ def process_job(client: Client, job: dict):
             fast_candidates_raw = scan_catalog_fast(tmp_pdf)
             raw_candidates = len(fast_candidates_raw)
             fast_candidates = _dedupe_candidates(fast_candidates_raw)
+            candidate_order_by_sku = {
+                candidate.sku: index + 1 for index, candidate in enumerate(fast_candidates)
+            }
             unique_skus = [candidate.sku for candidate in fast_candidates]
             total_items = len(fast_candidates)
             total_pages = max((candidate.page_no for candidate in fast_candidates_raw), default=0)
@@ -315,6 +318,9 @@ def process_job(client: Client, job: dict):
                             "signature": signature,
                             "quick_fingerprint": candidate.quick_fingerprint,
                             "change_type": change_type,
+                            "display_order": candidate_order_by_sku[candidate.sku],
+                            "source_page_no": candidate.page_no,
+                            "source_top": candidate.sku_bbox["top"],
                         }
                     )
                     status = "reused"
@@ -451,6 +457,9 @@ def process_job(client: Client, job: dict):
                             "signature": signature,
                             "quick_fingerprint": candidate.quick_fingerprint,
                             "change_type": change_type,
+                            "display_order": candidate_order_by_sku[item.sku],
+                            "source_page_no": candidate.page_no,
+                            "source_top": candidate.sku_bbox["top"],
                         }
                     )
 

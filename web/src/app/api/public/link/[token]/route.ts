@@ -34,8 +34,9 @@ export async function GET(
 
   const { data: items, error: itemsError } = await admin
     .from("catalog_items")
-    .select("sku,name,upc,pack,category,image_storage_path")
+    .select("sku,name,upc,pack,category,image_storage_path,display_order")
     .eq("catalog_id", link.catalog_id)
+    .order("display_order", { ascending: true })
     .order("category", { ascending: true })
     .order("name", { ascending: true });
 
@@ -61,8 +62,7 @@ export async function GET(
     .from("orders")
     .select("id,customer_name")
     .eq("customer_link_id", link.id)
-    .eq("catalog_id", link.catalog_id)
-    .eq("is_live", true)
+    .is("archived_at", null)
     .maybeSingle();
 
   let liveOrderItems: Array<{ sku: string; qty: number }> = [];

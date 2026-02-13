@@ -16,8 +16,9 @@ export default async function AdminOrderEditPage({
 
   const { data: order } = await admin
     .from("orders")
-    .select("id,customer_name")
+    .select("id,customer_name,catalog_id")
     .eq("id", id)
+    .is("archived_at", null)
     .single();
 
   if (!order) {
@@ -31,6 +32,14 @@ export default async function AdminOrderEditPage({
     .order("category", { ascending: true })
     .order("product_name", { ascending: true });
 
+  const { data: catalogProducts } = await admin
+    .from("catalog_items")
+    .select("sku,name,upc,pack,category,display_order")
+    .eq("catalog_id", order.catalog_id)
+    .order("display_order", { ascending: true })
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
   return (
     <div className="container grid">
       <AdminNav />
@@ -41,6 +50,7 @@ export default async function AdminOrderEditPage({
         orderId={order.id}
         initialCustomerName={order.customer_name}
         initialItems={items ?? []}
+        catalogProducts={catalogProducts ?? []}
       />
     </div>
   );

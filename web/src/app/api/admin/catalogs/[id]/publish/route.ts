@@ -12,7 +12,7 @@ export async function POST(
 
   const { data: catalog, error: catalogError } = await auth.admin
     .from("catalogs")
-    .select("id,status,parse_status,deleted_at")
+    .select("id,status,parse_status,parse_summary,deleted_at")
     .eq("id", id)
     .single();
 
@@ -23,6 +23,29 @@ export async function POST(
   if (catalog.deleted_at) {
     return NextResponse.json(
       { error: "Catalog is archived and cannot be published" },
+      { status: 400 },
+    );
+  }
+
+  if (catalog.parse_status === "queued" || catalog.parse_status === "processing") {
+    return NextResponse.json(
+      { error: "Catalog cannot be published while parsing is still in progress." },
+      { status: 400 },
+    );
+  }
+
+  if (catalog.parse_status === "failed") {
+    return NextResponse.json(
+      { error: "Catalog cannot be published because parsing failed." },
+      { status: 400 },
+    );
+  }
+
+  const parseSummary = (catalog.parse_summary ?? {}) as { failed_items?: number };
+  const failedItems = Number(parseSummary.failed_items ?? 0);
+  if (failedItems > 0) {
+    return NextResponse.json(
+      { error: `Catalog cannot be published because ${failedItems} items failed parsing.` },
       { status: 400 },
     );
   }

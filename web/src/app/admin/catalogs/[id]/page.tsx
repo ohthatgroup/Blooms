@@ -22,7 +22,10 @@ export default async function CatalogReviewPage({
     .maybeSingle();
 
   const parseStatus = catalog?.parse_status ?? "";
-  const parseSummary = (catalog?.parse_summary ?? {}) as { progress_percent?: number };
+  const parseSummary = (catalog?.parse_summary ?? {}) as {
+    progress_percent?: number;
+    failed_items?: number;
+  };
   const progressPercent = Math.max(
     0,
     Math.min(
@@ -35,6 +38,8 @@ export default async function CatalogReviewPage({
     ),
   );
   const parseActive = parseStatus === "queued" || parseStatus === "processing";
+  const hasBlockingParseFailures =
+    parseStatus === "failed" || Number(parseSummary.failed_items ?? 0) > 0;
 
   return (
     <div className="container grid">
@@ -43,10 +48,14 @@ export default async function CatalogReviewPage({
       <div>
         <Link href="/admin">Back to Catalogs</Link>
       </div>
-      {parseActive ? (
+      {parseActive || hasBlockingParseFailures ? (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>{catalog?.version_label ?? "Catalog"}</h2>
-          <div className="muted">Parsing in progress. Review is disabled until 100%.</div>
+          <div className="muted">
+            {parseActive
+              ? "Parsing in progress. Review is disabled until 100%."
+              : "Parsing has blocking failures. Re-run parser before review."}
+          </div>
           <div
             style={{
               marginTop: 12,
@@ -70,6 +79,11 @@ export default async function CatalogReviewPage({
           <div className="muted" style={{ marginTop: 8 }}>
             {progressPercent}%
           </div>
+          {hasBlockingParseFailures && (
+            <div className="pill red" style={{ marginTop: 8 }}>
+              Failed items: {parseSummary.failed_items ?? 0}
+            </div>
+          )}
         </div>
       ) : (
         <CatalogReviewClient catalogId={id} />

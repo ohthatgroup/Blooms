@@ -54,6 +54,7 @@ export default async function AdminPage() {
                 progress_percent?: number;
                 raw_candidates?: number;
                 unique_skus?: number;
+                failed_items?: number;
               };
               const parseProgress = Math.max(
                 0,
@@ -74,6 +75,8 @@ export default async function AdminPage() {
                 typeof summary.updated_items === "number" ||
                 typeof summary.unchanged_items === "number" ||
                 typeof summary.removed_items === "number";
+              const hasBlockingParseFailures =
+                catalog.parse_status === "failed" || (summary.failed_items ?? 0) > 0;
 
               return (
                 <tr key={catalog.id}>
@@ -107,6 +110,11 @@ export default async function AdminPage() {
                     <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                       {parseProgress}% {parseActive ? "(parsing)" : ""}
                     </div>
+                    {hasBlockingParseFailures && (
+                      <div className="pill red" style={{ marginTop: 4 }}>
+                        Parser failures: {summary.failed_items ?? 0}
+                      </div>
+                    )}
                     {hasDiffSummary && (
                       <div className="muted" style={{ fontSize: 12 }}>
                         n:{summary.new_items ?? 0} u:{summary.updated_items ?? 0} c:
@@ -122,7 +130,7 @@ export default async function AdminPage() {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 8 }}>
-                      {parseProgress >= 100 && !parseActive ? (
+                      {parseProgress >= 100 && !parseActive && !hasBlockingParseFailures ? (
                         <Link className="button secondary" href={`/admin/catalogs/${catalog.id}`}>
                           Review
                         </Link>

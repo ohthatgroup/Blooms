@@ -40,6 +40,7 @@ export async function GET(
     .from("catalog_items")
     .select("*")
     .eq("catalog_id", id)
+    .order("display_order", { ascending: true })
     .order("category", { ascending: true })
     .order("name", { ascending: true });
 

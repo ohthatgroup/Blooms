@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 
 interface CatalogOption {
@@ -15,6 +16,11 @@ interface LinkRow {
   created_at: string;
   catalogs?: { version_label: string };
   url: string;
+  has_order?: boolean;
+  order_id?: string | null;
+  total_skus?: number;
+  total_cases?: number;
+  updated_at?: string | null;
 }
 
 interface LinksManagerClientProps {
@@ -34,6 +40,10 @@ export function LinksManagerClient({
   const loadLinks = async () => {
     const response = await fetch("/api/admin/links");
     const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(body.error || "Failed to load links");
+      return;
+    }
     setLinks(body.links ?? []);
   };
 
@@ -113,6 +123,8 @@ export function LinksManagerClient({
               <th>Customer</th>
               <th>Catalog</th>
               <th>Status</th>
+              <th>Order</th>
+              <th>Updated</th>
               <th>URL</th>
               <th />
             </tr>
@@ -128,14 +140,40 @@ export function LinksManagerClient({
                   </span>
                 </td>
                 <td>
-                  <a href={link.url} target="_blank" rel="noreferrer">
-                    {link.url}
-                  </a>
+                  {link.has_order ? (
+                    <div className="muted">
+                      {link.total_skus ?? 0} SKUs / {link.total_cases ?? 0} cases
+                    </div>
+                  ) : (
+                    <span className="muted">No order yet</span>
+                  )}
                 </td>
                 <td>
-                  <button className="button secondary" onClick={() => void toggleLink(link.id, link.active)}>
-                    {link.active ? "Disable" : "Enable"}
-                  </button>
+                  {link.updated_at ? new Date(link.updated_at).toLocaleString() : "-"}
+                </td>
+                <td>
+                  {link.url ? (
+                    <a href={link.url} target="_blank" rel="noreferrer">
+                      {link.url}
+                    </a>
+                  ) : (
+                    <span className="muted">Set APP_BASE_URL for public links</span>
+                  )}
+                </td>
+                <td>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {link.order_id ? (
+                      <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                        Edit Order
+                      </Link>
+                    ) : null}
+                    <button
+                      className="button secondary"
+                      onClick={() => void toggleLink(link.id, link.active)}
+                    >
+                      {link.active ? "Disable" : "Enable"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

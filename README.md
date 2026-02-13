@@ -20,10 +20,20 @@ Production-ready V1 implementation with:
 1. Create a Supabase project.
 2. Run migration:
    - `supabase/migrations/202602130001_init.sql`
+   - `supabase/migrations/202602130002_parser_incremental_admin_ops.sql`
+   - `supabase/migrations/202602130003_parser_item_queue_progress.sql`
+   - `supabase/migrations/202602130004_orders_live_editing.sql`
+   - `supabase/migrations/202602130005_link_order_pdf_sequence.sql`
 3. Configure web env:
    - `web/.env.example` -> `web/.env.local`
 4. Configure parser env:
    - `parser-worker/.env.example` -> `parser-worker/.env`
+
+## Vercel Public Customer Links
+
+1. Set `APP_BASE_URL` in Vercel to your public production domain.
+2. Disable Vercel deployment protection/auth for customer links you share publicly.
+3. Keep admin routes protected by the app's Supabase auth (`/admin`, `/api/admin/*`).
 
 ## Run Web
 
@@ -58,4 +68,3 @@ npm run test
 cd parser-worker
 pytest
 ```
-

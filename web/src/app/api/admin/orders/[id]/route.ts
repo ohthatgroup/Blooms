@@ -14,8 +14,11 @@ export async function GET(
   const { id } = await context.params;
   const { data: order, error: orderError } = await auth.admin
     .from("orders")
-    .select("id,customer_name,catalog_id,total_skus,total_cases,submitted_at,csv_storage_path")
+    .select(
+      "id,customer_name,catalog_id,customer_link_id,total_skus,total_cases,submitted_at,csv_storage_path",
+    )
     .eq("id", id)
+    .is("archived_at", null)
     .single();
 
   if (orderError || !order) {
@@ -36,7 +39,39 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ order, items: items ?? [] });
+  const { data: catalogProducts, error: catalogProductsError } = await auth.admin
+    .from("catalog_items")
+    .select("sku,name,upc,pack,category,display_order")
+    .eq("catalog_id", order.catalog_id)
+    .order("display_order", { ascending: true })
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (catalogProductsError) {
+    return NextResponse.json(
+      {
+        error: "Failed to load catalog products",
+        details: catalogProductsError.message,
+      },
+      { status: 500 },
+    );
+  }
+
+  const displayOrderBySku = new Map(
+    (catalogProducts ?? []).map((product) => [product.sku, product.display_order ?? 0]),
+  );
+  const sortedItems = [...(items ?? [])].sort((a, b) => {
+    const ao = displayOrderBySku.get(a.sku) ?? Number.MAX_SAFE_INTEGER;
+    const bo = displayOrderBySku.get(b.sku) ?? Number.MAX_SAFE_INTEGER;
+    if (ao !== bo) return ao - bo;
+    return a.sku.localeCompare(b.sku);
+  });
+
+  return NextResponse.json({
+    order,
+    items: sortedItems,
+    catalog_products: catalogProducts ?? [],
+  });
 }
 
 export async function PATCH(
@@ -60,6 +95,7 @@ export async function PATCH(
     .from("orders")
     .select("id,catalog_id")
     .eq("id", id)
+    .is("archived_at", null)
     .single();
 
   if (orderError || !order) {

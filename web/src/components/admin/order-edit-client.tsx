@@ -11,21 +11,50 @@ interface OrderEditItem {
   qty: number;
 }
 
+interface CatalogProductOption {
+  sku: string;
+  name: string;
+  upc: string | null;
+  pack: string | null;
+  category: string;
+  display_order: number;
+}
+
 interface OrderEditClientProps {
   orderId: string;
   initialCustomerName: string;
   initialItems: OrderEditItem[];
+  catalogProducts: CatalogProductOption[];
 }
 
 export function OrderEditClient({
   orderId,
   initialCustomerName,
   initialItems,
+  catalogProducts,
 }: OrderEditClientProps) {
   const [customerName, setCustomerName] = useState(initialCustomerName);
   const [items, setItems] = useState(initialItems);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
+
+  const productOrderBySku = useMemo(
+    () =>
+      new Map(
+        catalogProducts.map((product) => [product.sku, product.display_order ?? 0]),
+      ),
+    [catalogProducts],
+  );
+
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const ao = productOrderBySku.get(a.sku) ?? Number.MAX_SAFE_INTEGER;
+      const bo = productOrderBySku.get(b.sku) ?? Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      return a.sku.localeCompare(b.sku);
+    });
+  }, [items, productOrderBySku]);
 
   const totals = useMemo(() => {
     const filtered = items.filter((item) => item.qty > 0);
@@ -34,6 +63,41 @@ export function OrderEditClient({
       cases: filtered.reduce((sum, item) => sum + item.qty, 0),
     };
   }, [items]);
+
+  const addableProducts = useMemo(() => {
+    const currentSkus = new Set(items.map((item) => item.sku));
+    const query = search.trim().toLowerCase();
+    return catalogProducts
+      .filter((product) => !currentSkus.has(product.sku))
+      .filter((product) => {
+        if (!query) return true;
+        return (
+          product.sku.toLowerCase().includes(query) ||
+          product.name.toLowerCase().includes(query) ||
+          (product.upc ?? "").toLowerCase().includes(query)
+        );
+      })
+      .slice(0, 30);
+  }, [catalogProducts, items, search]);
+
+  function addProduct(product: CatalogProductOption) {
+    setItems((prev) => [
+      ...prev,
+      {
+        sku: product.sku,
+        product_name: product.name,
+        upc: product.upc,
+        pack: product.pack,
+        category: product.category,
+        qty: 1,
+      },
+    ]);
+    setSearch("");
+  }
+
+  function removeProduct(sku: string) {
+    setItems((prev) => prev.filter((item) => item.sku !== sku));
+  }
 
   async function saveOrder() {
     const payloadItems = items
@@ -91,6 +155,31 @@ export function OrderEditClient({
         </div>
       </div>
 
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Add Product</h3>
+        <input
+          className="input"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by SKU, name, or UPC..."
+        />
+        <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+          {addableProducts.map((product) => (
+            <button
+              key={product.sku}
+              className="button secondary"
+              onClick={() => addProduct(product)}
+              style={{ textAlign: "left" }}
+            >
+              {product.sku} - {product.name}
+            </button>
+          ))}
+          {addableProducts.length === 0 && (
+            <div className="muted">No matching products to add.</div>
+          )}
+        </div>
+      </div>
+
       <div className="card" style={{ overflowX: "auto" }}>
         <table className="table">
           <thead>
@@ -101,10 +190,11 @@ export function OrderEditClient({
               <th>Pack</th>
               <th>Category</th>
               <th>Qty</th>
+              <th />
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {sortedItems.map((item) => (
               <tr key={item.sku}>
                 <td>{item.sku}</td>
                 <td>{item.product_name}</td>
@@ -126,6 +216,14 @@ export function OrderEditClient({
                       );
                     }}
                   />
+                </td>
+                <td>
+                  <button
+                    className="button secondary"
+                    onClick={() => removeProduct(item.sku)}
+                  >
+                    Remove
+                  </button>
                 </td>
               </tr>
             ))}

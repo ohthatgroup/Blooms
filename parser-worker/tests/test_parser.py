@@ -62,6 +62,20 @@ def test_scan_catalog_fast_produces_candidates():
     unique_skus = {c.sku for c in candidates}
     assert len(unique_skus) == 858
     assert any(c.sku == "BLM375" for c in candidates)
+    expected_head = [
+        "ONG1020",
+        "ONG1021",
+        "ONG1022",
+        "BLM494",
+        "BLM492",
+        "BLM490",
+        "BLM493",
+        "BLM489",
+        "BLM495",
+        "BLM497",
+    ]
+    assert [candidate.sku for candidate in candidates[:10]] == expected_head
+    assert all(candidate.quick_fingerprint for candidate in candidates[:20])
 
 
 def test_parse_catalog_pdf_sku_filter():

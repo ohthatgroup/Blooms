@@ -178,7 +178,10 @@ def _assign_images_to_skus(
     words: list[dict[str, Any]],
     images: list[dict[str, Any]],
 ) -> list[tuple[dict[str, Any], dict[str, Any] | None]]:
-    skus = [w for w in words if SKU_RE.fullmatch(w["text"]) and w["top"] > 120]
+    skus = sorted(
+        [w for w in words if SKU_RE.fullmatch(w["text"]) and w["top"] > 120],
+        key=lambda row: (round(row["top"], 2), row["x0"]),
+    )
     used_image_indexes: set[int] = set()
     assignments: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
     for sku_word in skus:

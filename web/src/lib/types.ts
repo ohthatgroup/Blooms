@@ -45,6 +45,9 @@ export interface CatalogItem {
   signature?: string;
   quick_fingerprint?: string | null;
   change_type?: "new" | "updated" | "unchanged";
+  display_order?: number;
+  source_page_no?: number | null;
+  source_top?: number | null;
   updated_at: string;
 }
 
@@ -69,6 +72,7 @@ export interface Order {
   total_cases: number;
   csv_storage_path: string | null;
   is_live?: boolean;
+  archived_at?: string | null;
   updated_at?: string;
 }
 

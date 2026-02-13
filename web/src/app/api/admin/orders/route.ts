@@ -8,9 +8,9 @@ export async function GET() {
   const { data, error } = await auth.admin
     .from("orders")
     .select(
-      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,is_live,updated_at,customer_links(customer_name,token),catalogs(version_label)",
+      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,updated_at,customer_links(customer_name,token),catalogs(version_label)",
     )
-    .eq("is_live", true)
+    .is("archived_at", null)
     .order("submitted_at", { ascending: false })
     .limit(200);
 

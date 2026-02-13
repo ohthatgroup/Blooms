@@ -10,9 +10,9 @@ export default async function AdminOrdersPage() {
   const { data: orders } = await admin
     .from("orders")
     .select(
-      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,is_live,customer_links(token),catalogs(version_label)",
+      "id,customer_name,submitted_at,total_skus,total_cases,csv_storage_path,customer_links(token),catalogs(version_label)",
     )
-    .eq("is_live", true)
+    .is("archived_at", null)
     .order("submitted_at", { ascending: false })
     .limit(300);
 

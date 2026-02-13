@@ -89,8 +89,7 @@ export async function POST(request: Request) {
     .from("orders")
     .select("id")
     .eq("customer_link_id", link.id)
-    .eq("catalog_id", link.catalog_id)
-    .eq("is_live", true)
+    .is("archived_at", null)
     .maybeSingle();
 
   if (liveOrderError) {
@@ -130,7 +129,7 @@ export async function POST(request: Request) {
         submitted_at: now,
         total_skus: totalSkus,
         total_cases: totalCases,
-        is_live: true,
+        archived_at: null,
         updated_at: now,
       })
       .select("id")
