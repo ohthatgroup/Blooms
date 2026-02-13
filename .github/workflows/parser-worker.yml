@@ -2,6 +2,15 @@ name: Parser Worker
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this dispatch was triggered"
+        required: false
+        type: string
+      catalog_id:
+        description: "Catalog id associated with trigger"
+        required: false
+        type: string
   schedule:
     - cron: "*/5 * * * *"
 
@@ -36,6 +45,8 @@ jobs:
 
       - name: Process parser queue
         run: |
+          echo "Dispatch reason: ${{ github.event.inputs.reason || 'scheduled_or_manual' }}"
+          echo "Catalog id: ${{ github.event.inputs.catalog_id || 'n/a' }}"
           python - <<'PY'
           import worker
 
@@ -48,4 +59,3 @@ jobs:
 
           print(f"Processed jobs: {processed}")
           PY
-
