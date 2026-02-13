@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ProductForOrder } from "@/lib/types";
 
 interface OrderClientProps {
@@ -40,6 +40,9 @@ export function OrderClient({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [showReview, setShowReview] = useState(false);
+  const [zoomed, setZoomed] = useState<{ url: string; alt: string } | null>(
+    null,
+  );
 
   const categories = useMemo(
     () => Array.from(new Set(products.map((x) => x.category))),
@@ -63,15 +66,6 @@ export function OrderClient({
     return result;
   }, [activeTab, products, search]);
 
-  const groupedProducts = useMemo(() => {
-    const grouped: Record<string, ProductForOrder[]> = {};
-    filteredProducts.forEach((p) => {
-      if (!grouped[p.category]) grouped[p.category] = [];
-      grouped[p.category].push(p);
-    });
-    return grouped;
-  }, [filteredProducts]);
-
   const orderItems = useMemo(() => {
     return Object.entries(quantities)
       .map(([sku, qty]) => {
@@ -82,7 +76,7 @@ export function OrderClient({
       .filter((x): x is ProductForOrder & { qty: number } => Boolean(x))
       .sort(
         (a, b) =>
-          a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
+          (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.sku.localeCompare(b.sku),
       );
   }, [products, quantities]);
 
@@ -138,6 +132,17 @@ export function OrderClient({
     setShowReview(false);
   }
 
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setZoomed(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [zoomed]);
+
   return (
     <div className="container" style={{ paddingBottom: 90 }}>
       <div className="card" style={{ marginBottom: 10 }}>
@@ -184,70 +189,63 @@ export function OrderClient({
         </div>
       </div>
 
-      {Object.entries(groupedProducts).map(([category, group]) => (
-        <div key={category} className="card" style={{ marginBottom: 10 }}>
-          <h2 style={{ marginTop: 0, fontSize: 18 }}>
-            {category} <span className="muted">({group.length})</span>
-          </h2>
-          <div className="grid">
-            {group.map((product) => {
-              const qty = quantities[product.sku] ?? 0;
-              return (
-                <div
-                  key={product.sku}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "56px 1fr auto",
-                    gap: 10,
-                    alignItems: "center",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: 8,
-                    background: qty > 0 ? "#e8f5e9" : "white",
-                  }}
-                >
-                  {product.imageUrl ? (
-                    <img
-                      src={product.imageUrl}
-                      alt={product.name}
-                      width={48}
-                      height={48}
-                      style={{ objectFit: "cover", borderRadius: 6 }}
-                    />
-                  ) : (
-                    <div
-                      style={{ width: 48, height: 48, borderRadius: 6, background: "#eee" }}
-                    />
-                  )}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: "var(--green)" }}>{product.sku}</div>
-                    <div>{product.name}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {product.pack} • {product.upc}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <button className="button secondary" onClick={() => setQty(product.sku, qty - 1)}>
-                      -
-                    </button>
-                    <input
-                      className="input"
-                      style={{ width: 56, textAlign: "center" }}
-                      type="number"
-                      min={0}
-                      value={qty || ""}
-                      onChange={(e) => setQty(product.sku, e.target.value)}
-                    />
-                    <button className="button secondary" onClick={() => setQty(product.sku, qty + 1)}>
-                      +
-                    </button>
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div className="grid">
+          {filteredProducts.map((product) => {
+            const qty = quantities[product.sku] ?? 0;
+            return (
+              <div
+                key={product.sku}
+                className="productRow"
+                style={{ background: qty > 0 ? "#e8f5e9" : "white" }}
+              >
+                {product.imageUrl ? (
+                  <img
+                    className="productImage"
+                    src={product.imageUrl}
+                    alt={product.name}
+                    width={48}
+                    height={48}
+                    style={{ objectFit: "cover", borderRadius: 6 }}
+                    onClick={() => setZoomed({ url: product.imageUrl, alt: product.name })}
+                  />
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: 6, background: "#eee" }} />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: "var(--green)" }}>{product.sku}</div>
+                  <div>{product.name}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {product.pack} • {product.upc} • {product.category}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="productQty">
+                  <button
+                    className="button secondary"
+                    onClick={() => setQty(product.sku, qty - 1)}
+                  >
+                    -
+                  </button>
+                  <input
+                    className="input"
+                    style={{ width: 56, textAlign: "center" }}
+                    type="number"
+                    min={0}
+                    value={qty || ""}
+                    onChange={(e) => setQty(product.sku, e.target.value)}
+                  />
+                  <button
+                    className="button secondary"
+                    onClick={() => setQty(product.sku, qty + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      </div>
 
       {message && (
         <div className="card" style={{ marginBottom: 70 }}>
@@ -326,6 +324,34 @@ export function OrderClient({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {zoomed && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            display: "grid",
+            placeItems: "center",
+            padding: 14,
+            zIndex: 1000,
+          }}
+          onClick={() => setZoomed(null)}
+        >
+          <img
+            src={zoomed.url}
+            alt={zoomed.alt}
+            style={{
+              maxWidth: "92vw",
+              maxHeight: "82vh",
+              objectFit: "contain",
+              borderRadius: 10,
+              background: "white",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

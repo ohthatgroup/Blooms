@@ -49,6 +49,7 @@ export default async function CustomerOrderPage({
     imageUrl: item.image_storage_path
       ? getPublicProductImageUrl(item.image_storage_path)
       : "",
+    displayOrder: item.display_order ?? 0,
   }));
 
   const { data: liveOrder } = await admin

@@ -114,4 +114,5 @@ export interface ProductForOrder {
   pack: string;
   category: string;
   imageUrl: string;
+  displayOrder: number;
 }
