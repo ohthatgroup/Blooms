@@ -41,8 +41,10 @@ export const patchOrderSchema = z.object({
   items: z
     .array(
       z.object({
-        sku: z.string().min(2),
+        sku: z.string().min(1),
         qty: z.number().int().positive(),
+        product_name: z.string().min(1).optional(),
+        is_custom: z.boolean().optional(),
       }),
     )
     .min(1),

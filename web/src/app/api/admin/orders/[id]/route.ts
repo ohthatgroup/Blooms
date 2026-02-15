@@ -74,6 +74,31 @@ export async function GET(
   });
 }
 
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const { id } = await context.params;
+  const now = new Date().toISOString();
+  const { error } = await auth.admin
+    .from("orders")
+    .update({ archived_at: now })
+    .eq("id", id)
+    .is("archived_at", null);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Failed to archive order", details: error.message },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -102,40 +127,57 @@ export async function PATCH(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const requestedSkus = parsed.data.items.map((item) => item.sku);
-  const { data: products, error: productsError } = await auth.admin
-    .from("catalog_items")
-    .select("sku,name,upc,pack,category")
-    .eq("catalog_id", order.catalog_id)
-    .in("sku", requestedSkus);
+  const catalogItems = parsed.data.items.filter((item) => !item.is_custom);
+  const customItems = parsed.data.items.filter((item) => item.is_custom);
 
-  if (productsError) {
-    return NextResponse.json(
-      { error: "Failed to load products", details: productsError.message },
-      { status: 500 },
-    );
+  const catalogSkus = catalogItems.map((item) => item.sku);
+  let productBySku = new Map<string, { sku: string; name: string; upc: string | null; pack: string | null; category: string }>();
+
+  if (catalogSkus.length > 0) {
+    const { data: products, error: productsError } = await auth.admin
+      .from("catalog_items")
+      .select("sku,name,upc,pack,category")
+      .eq("catalog_id", order.catalog_id)
+      .in("sku", catalogSkus);
+
+    if (productsError) {
+      return NextResponse.json(
+        { error: "Failed to load products", details: productsError.message },
+        { status: 500 },
+      );
+    }
+
+    productBySku = new Map((products ?? []).map((row) => [row.sku, row]));
+    const invalid = catalogSkus.filter((sku) => !productBySku.has(sku));
+    if (invalid.length > 0) {
+      return NextResponse.json(
+        { error: "One or more items are invalid for this catalog", invalid },
+        { status: 400 },
+      );
+    }
   }
 
-  const productBySku = new Map((products ?? []).map((row) => [row.sku, row]));
-  const invalid = requestedSkus.filter((sku) => !productBySku.has(sku));
-  if (invalid.length > 0) {
-    return NextResponse.json(
-      { error: "One or more items are invalid for this catalog", invalid },
-      { status: 400 },
-    );
-  }
-
-  const orderItems = parsed.data.items.map((entry) => {
-    const product = productBySku.get(entry.sku)!;
-    return {
-      sku: product.sku,
-      product_name: product.name,
-      upc: product.upc ?? "",
-      pack: product.pack ?? "",
-      category: product.category,
+  const orderItems = [
+    ...catalogItems.map((entry) => {
+      const product = productBySku.get(entry.sku)!;
+      return {
+        sku: product.sku,
+        product_name: product.name,
+        upc: product.upc ?? "",
+        pack: product.pack ?? "",
+        category: product.category,
+        qty: entry.qty,
+      };
+    }),
+    ...customItems.map((entry) => ({
+      sku: entry.sku,
+      product_name: entry.product_name ?? entry.sku,
+      upc: "",
+      pack: "",
+      category: "Custom",
       qty: entry.qty,
-    };
-  });
+    })),
+  ];
   const totalSkus = orderItems.length;
   const totalCases = orderItems.reduce((sum, row) => sum + row.qty, 0);
   const now = new Date().toISOString();

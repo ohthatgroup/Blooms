@@ -47,7 +47,12 @@ export default async function AdminOrderEditPage({
       <OrderEditClient
         orderId={order.id}
         initialCustomerName={order.customer_name}
-        initialItems={items ?? []}
+        initialItems={(() => {
+          const catalogSkus = new Set((catalogProducts ?? []).map((p) => p.sku));
+          return (items ?? []).map((item) =>
+            catalogSkus.has(item.sku) ? item : { ...item, is_custom: true },
+          );
+        })()}
         catalogProducts={catalogProducts ?? []}
       />
     </div>

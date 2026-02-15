@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { OrderDeleteButton } from "@/components/admin/order-delete-button";
 
 interface CatalogOption {
   id: string;
@@ -227,9 +228,17 @@ export function LinksManagerClient({
                       <td>
                         <div style={{ display: "flex", gap: 8 }}>
                           {link.order_id ? (
-                            <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
-                              Edit
-                            </Link>
+                            <>
+                              <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                                Edit
+                              </Link>
+                              {link.has_order && (
+                                <a className="button secondary" href={`/api/admin/orders/${link.order_id}/csv`} download>
+                                  CSV
+                                </a>
+                              )}
+                              <OrderDeleteButton orderId={link.order_id} onDeleted={() => void loadLinks()} />
+                            </>
                           ) : null}
                           <button
                             className="button secondary"
@@ -292,9 +301,17 @@ export function LinksManagerClient({
                 )}
                 <div className="mobile-card__actions">
                   {link.order_id ? (
-                    <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
-                      Edit Order
-                    </Link>
+                    <>
+                      <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                        Edit Order
+                      </Link>
+                      {link.has_order && (
+                        <a className="button secondary" href={`/api/admin/orders/${link.order_id}/csv`} download>
+                          CSV
+                        </a>
+                      )}
+                      <OrderDeleteButton orderId={link.order_id} onDeleted={() => void loadLinks()} />
+                    </>
                   ) : null}
                   <button
                     className="button secondary"

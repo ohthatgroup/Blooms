@@ -381,7 +381,8 @@ a {
 
 @media (min-width: 1024px) {
   .stat-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+    justify-content: start;
   }
 }
 
@@ -391,6 +392,7 @@ a {
   border-radius: 12px;
   padding: 20px;
   box-shadow: var(--shadow-sm);
+  min-width: 120px;
 }
 
 .stat-card__value {

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { CatalogUploadPanel } from "@/components/admin/catalog-upload-panel";
-import { TriggerParserButton } from "@/components/admin/trigger-parser-button";
 import { CatalogDeleteButton } from "@/components/admin/catalog-delete-button";
 import { AutoRefreshWhenEnabled } from "@/components/admin/auto-refresh-when-enabled";
 
@@ -53,9 +52,6 @@ export default async function AdminPage() {
       {/* Upload Section */}
       <div className="section-header">
         <h2 className="section-header__title">Upload New Catalog</h2>
-        <div className="section-header__actions">
-          <TriggerParserButton />
-        </div>
       </div>
       <CatalogUploadPanel />
 
@@ -138,26 +134,36 @@ export default async function AdminPage() {
                               {catalog.parse_status}
                             </span>
                           </div>
-                          <div className="progress" style={{ width: 160 }}>
-                            <div
-                              className={`progress__bar${parseProgress >= 100 ? " progress__bar--complete" : ""}`}
-                              style={{ width: `${parseProgress}%` }}
-                            />
-                          </div>
-                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                            {parseProgress}% {parseActive ? "(parsing)" : ""}
-                          </div>
+                          {parseActive ? (
+                            <>
+                              <div className="progress" style={{ width: 160 }}>
+                                <div
+                                  className="progress__bar"
+                                  style={{ width: `${parseProgress}%` }}
+                                />
+                              </div>
+                              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                {parseProgress}% (parsing)
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {hasDiffSummary ? (
+                                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                  {summary.new_items ?? 0} new, {summary.updated_items ?? 0} updated, {summary.unchanged_items ?? 0} unchanged, {summary.removed_items ?? 0} removed
+                                </div>
+                              ) : (summary.unique_skus ?? summary.raw_candidates) ? (
+                                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                  {summary.unique_skus ?? summary.raw_candidates ?? 0} total items
+                                </div>
+                              ) : null}
+                            </>
+                          )}
                           {hasBlockingParseFailures && (
                             <span className="badge badge--error" style={{ marginTop: 4 }}>
                               <span className="badge__dot" />
                               Failures: {summary.failed_items ?? 0}
                             </span>
-                          )}
-                          {hasDiffSummary && (
-                            <div className="muted" style={{ fontSize: 12 }}>
-                              n:{summary.new_items ?? 0} u:{summary.updated_items ?? 0} c:
-                              {summary.unchanged_items ?? 0} r:{summary.removed_items ?? 0}
-                            </div>
                           )}
                         </td>
                         <td>{new Date(catalog.created_at).toLocaleString()}</td>
@@ -198,6 +204,8 @@ export default async function AdminPage() {
                 updated_items?: number;
                 unchanged_items?: number;
                 removed_items?: number;
+                raw_candidates?: number;
+                unique_skus?: number;
               };
               const parseProgress = Math.max(
                 0,
@@ -236,17 +244,28 @@ export default async function AdminPage() {
                       {catalog.parse_status}
                     </span>
                   </div>
-                  <div style={{ margin: "8px 0" }}>
-                    <div className="progress">
-                      <div
-                        className={`progress__bar${parseProgress >= 100 ? " progress__bar--complete" : ""}`}
-                        style={{ width: `${parseProgress}%` }}
-                      />
+                  {parseActive ? (
+                    <div style={{ margin: "8px 0" }}>
+                      <div className="progress">
+                        <div
+                          className="progress__bar"
+                          style={{ width: `${parseProgress}%` }}
+                        />
+                      </div>
+                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        {parseProgress}% (parsing)
+                      </div>
                     </div>
-                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                      {parseProgress}% {parseActive ? "(parsing)" : ""}
+                  ) : (
+                    <div className="mobile-card__row">
+                      <span className="mobile-card__label">Items</span>
+                      <span className="mobile-card__value muted" style={{ fontSize: 12 }}>
+                        {typeof summary.new_items === "number"
+                          ? `${summary.new_items} new, ${summary.updated_items ?? 0} upd, ${summary.unchanged_items ?? 0} unch, ${summary.removed_items ?? 0} rem`
+                          : `${summary.unique_skus ?? summary.raw_candidates ?? 0} total`}
+                      </span>
                     </div>
-                  </div>
+                  )}
                   {hasBlockingParseFailures && (
                     <span className="badge badge--error" style={{ marginTop: 4 }}>
                       <span className="badge__dot" />
