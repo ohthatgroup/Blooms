@@ -44,7 +44,6 @@ export function LinksManagerClient({
       await navigator.clipboard.writeText(text);
       setMessage("Copied link to clipboard");
     } catch {
-      // Fallback for older browsers / denied clipboard permissions.
       const ok = window.prompt("Copy this link:", text);
       if (ok !== null) setMessage("Copy the link from the prompt");
     }
@@ -98,10 +97,11 @@ export function LinksManagerClient({
 
   return (
     <div className="grid">
-      <form className="card grid" onSubmit={createLink}>
+      {/* Create Link Form */}
+      <form className="card card--prominent form-section" onSubmit={createLink}>
         <h2 style={{ margin: 0 }}>Create Customer Order Link</h2>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Catalog Version</span>
+        <div className="form-group">
+          <label className="form-label">Catalog Version</label>
           <select
             className="input"
             value={catalogId}
@@ -114,24 +114,29 @@ export function LinksManagerClient({
               </option>
             ))}
           </select>
-        </label>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Customer Name</span>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Customer Name</label>
           <input
             className="input"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             required
           />
-        </label>
+        </div>
         <button className="button" disabled={!catalogId}>
           Generate Link
         </button>
         {(message || lastCreatedUrl) && (
-          <div className="muted" style={{ display: "grid", gap: 8 }}>
-            {message ? <div>{message}</div> : null}
+          <div style={{ display: "grid", gap: 8 }}>
+            {message ? (
+              <span className={`badge ${message.includes("Failed") || message.includes("failed") ? "badge--error" : "badge--success"}`}>
+                <span className="badge__dot" />
+                {message}
+              </span>
+            ) : null}
             {lastCreatedUrl ? (
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="url-display">
                 <a href={lastCreatedUrl} target="_blank" rel="noreferrer">
                   {lastCreatedUrl}
                 </a>
@@ -149,81 +154,160 @@ export function LinksManagerClient({
         )}
       </form>
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        <h2 style={{ marginTop: 0 }}>Orders</h2>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Catalog</th>
-              <th>Status</th>
-              <th>Order</th>
-              <th>Updated</th>
-              <th>Link</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
+      {/* Links Table - Desktop */}
+      {links.length === 0 ? (
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-state__icon">&#128279;</div>
+            <p className="empty-state__title">No customer links yet</p>
+            <p className="empty-state__description">Create a link above to get started.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="table-container">
+            <div className="table-container__header">
+              <h3 style={{ margin: 0 }}>Customer Links</h3>
+            </div>
+            <div className="table-container__body">
+              <table className="table table-mobile-cards">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Catalog</th>
+                    <th>Status</th>
+                    <th>Order</th>
+                    <th>Updated</th>
+                    <th>Link</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {links.map((link) => (
+                    <tr key={link.id}>
+                      <td style={{ fontWeight: 600 }}>{link.customer_name}</td>
+                      <td>{link.catalogs?.version_label}</td>
+                      <td>
+                        <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
+                          <span className="badge__dot" />
+                          {link.active ? "active" : "disabled"}
+                        </span>
+                      </td>
+                      <td>
+                        {link.has_order ? (
+                          <div className="muted">
+                            {link.total_skus ?? 0} SKUs / {link.total_cases ?? 0} cases
+                          </div>
+                        ) : (
+                          <span className="muted">No order yet</span>
+                        )}
+                      </td>
+                      <td>
+                        {link.updated_at ? new Date(link.updated_at).toLocaleString() : "-"}
+                      </td>
+                      <td>
+                        {link.url ? (
+                          <div className="url-display">
+                            <a href={link.url} target="_blank" rel="noreferrer">
+                              {link.url}
+                            </a>
+                            <button
+                              type="button"
+                              className="button secondary"
+                              style={{ padding: "6px 10px" }}
+                              onClick={() => void copyToClipboard(link.url)}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted">Set APP_BASE_URL</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {link.order_id ? (
+                            <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                              Edit
+                            </Link>
+                          ) : null}
+                          <button
+                            className="button secondary"
+                            onClick={() => void toggleLink(link.id, link.active)}
+                          >
+                            {link.active ? "Disable" : "Enable"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="mobile-card-list">
             {links.map((link) => (
-              <tr key={link.id}>
-                <td>{link.customer_name}</td>
-                <td>{link.catalogs?.version_label}</td>
-                <td>
-                  <span className={`pill ${link.active ? "green" : "red"}`}>
+              <div className="mobile-card" key={link.id}>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Customer</span>
+                  <span className="mobile-card__value" style={{ fontWeight: 600 }}>{link.customer_name}</span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Catalog</span>
+                  <span className="mobile-card__value">{link.catalogs?.version_label}</span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Status</span>
+                  <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
+                    <span className="badge__dot" />
                     {link.active ? "active" : "disabled"}
                   </span>
-                </td>
-                <td>
-                  {link.has_order ? (
-                    <div className="muted">
-                      {link.total_skus ?? 0} SKUs / {link.total_cases ?? 0} cases
-                    </div>
-                  ) : (
-                    <span className="muted">No order yet</span>
-                  )}
-                </td>
-                <td>
-                  {link.updated_at ? new Date(link.updated_at).toLocaleString() : "-"}
-                </td>
-                <td>
-                  {link.url ? (
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <a href={link.url} target="_blank" rel="noreferrer">
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Order</span>
+                  <span className="mobile-card__value">
+                    {link.has_order
+                      ? `${link.total_skus ?? 0} SKUs / ${link.total_cases ?? 0} cases`
+                      : "No order yet"}
+                  </span>
+                </div>
+                {link.url && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className="url-display">
+                      <a href={link.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
                         {link.url}
                       </a>
                       <button
                         type="button"
                         className="button secondary"
-                        style={{ padding: "6px 10px" }}
+                        style={{ padding: "4px 8px", fontSize: 12 }}
                         onClick={() => void copyToClipboard(link.url)}
                       >
                         Copy
                       </button>
                     </div>
-                  ) : (
-                    <span className="muted">Set APP_BASE_URL for public links</span>
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {link.order_id ? (
-                      <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
-                        Edit Order
-                      </Link>
-                    ) : null}
-                    <button
-                      className="button secondary"
-                      onClick={() => void toggleLink(link.id, link.active)}
-                    >
-                      {link.active ? "Disable" : "Enable"}
-                    </button>
                   </div>
-                </td>
-              </tr>
+                )}
+                <div className="mobile-card__actions">
+                  {link.order_id ? (
+                    <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                      Edit Order
+                    </Link>
+                  ) : null}
+                  <button
+                    className="button secondary"
+                    onClick={() => void toggleLink(link.id, link.active)}
+                  >
+                    {link.active ? "Disable" : "Enable"}
+                  </button>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

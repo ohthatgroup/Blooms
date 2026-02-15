@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAdminPage } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { AdminNav } from "@/components/admin-nav";
 import { OrderEditClient } from "@/components/admin/order-edit-client";
 
 export default async function AdminOrderEditPage({
@@ -10,7 +8,6 @@ export default async function AdminOrderEditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdminPage();
   const admin = createSupabaseAdminClient();
   const { id } = await params;
 
@@ -42,9 +39,10 @@ export default async function AdminOrderEditPage({
 
   return (
     <div className="container grid">
-      <AdminNav />
       <div>
-        <Link href="/admin/orders">Back to Orders</Link>
+        <Link href="/admin/orders" className="button secondary">
+          &larr; Back to Orders
+        </Link>
       </div>
       <OrderEditClient
         orderId={order.id}

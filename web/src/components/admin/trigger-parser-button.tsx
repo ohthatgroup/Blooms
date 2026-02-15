@@ -20,12 +20,16 @@ export function TriggerParserButton() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       <button className="button secondary" onClick={triggerNow} disabled={busy}>
         {busy ? "Triggering..." : "Run Parser Now"}
       </button>
-      {message ? <span className="muted" style={{ fontSize: 12 }}>{message}</span> : null}
+      {message ? (
+        <span className={`badge ${message.includes("Failed") || message.includes("failed") ? "badge--error" : "badge--success"}`}>
+          <span className="badge__dot" />
+          {message}
+        </span>
+      ) : null}
     </div>
   );
 }
-

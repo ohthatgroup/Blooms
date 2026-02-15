@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { requireAdminPage } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { AdminNav } from "@/components/admin-nav";
 import { CatalogReviewClient } from "@/components/admin/catalog-review-client";
 import { AutoRefreshWhenEnabled } from "@/components/admin/auto-refresh-when-enabled";
 
@@ -10,7 +8,6 @@ export default async function CatalogReviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdminPage();
   const admin = createSupabaseAdminClient();
   const { id } = await params;
 
@@ -44,45 +41,41 @@ export default async function CatalogReviewPage({
   return (
     <div className="container grid">
       <AutoRefreshWhenEnabled enabled={parseActive} />
-      <AdminNav />
       <div>
-        <Link href="/admin">Back to Catalogs</Link>
+        <Link href="/admin" className="button secondary">
+          &larr; Back to Catalogs
+        </Link>
       </div>
       {parseActive || hasBlockingParseFailures ? (
         <div className="card">
           <h2 style={{ marginTop: 0 }}>{catalog?.version_label ?? "Catalog"}</h2>
-          <div className="muted">
-            {parseActive
-              ? "Parsing in progress. Review is disabled until 100%."
-              : "Parsing has blocking failures. Re-run parser before review."}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span className={`badge badge--${parseActive ? "processing" : "error"}`}>
+              <span className="badge__dot" />
+              {parseActive
+                ? "Parsing in progress"
+                : "Blocking failures"}
+            </span>
           </div>
-          <div
-            style={{
-              marginTop: 12,
-              width: "100%",
-              maxWidth: 480,
-              height: 12,
-              borderRadius: 999,
-              background: "#eceff1",
-              overflow: "hidden",
-            }}
-          >
+          <div className="muted" style={{ marginBottom: 12 }}>
+            {parseActive
+              ? "Review is disabled until parsing reaches 100%."
+              : "Re-run parser before review."}
+          </div>
+          <div className="progress progress--lg" style={{ maxWidth: 480 }}>
             <div
-              style={{
-                width: `${progressPercent}%`,
-                height: "100%",
-                background: "#1565c0",
-                transition: "width 0.25s ease",
-              }}
+              className={`progress__bar${progressPercent >= 100 ? " progress__bar--complete" : ""}`}
+              style={{ width: `${progressPercent}%` }}
             />
           </div>
           <div className="muted" style={{ marginTop: 8 }}>
             {progressPercent}%
           </div>
           {hasBlockingParseFailures && (
-            <div className="pill red" style={{ marginTop: 8 }}>
+            <span className="badge badge--error" style={{ marginTop: 8 }}>
+              <span className="badge__dot" />
               Failed items: {parseSummary.failed_items ?? 0}
-            </div>
+            </span>
           )}
         </div>
       ) : (

@@ -187,34 +187,19 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   }
 
   if (loading) {
-    return <div className="card">Loading catalog review...</div>;
+    return (
+      <div className="card" style={{ padding: 32, textAlign: "center" }}>
+        <div className="muted">Loading catalog review...</div>
+      </div>
+    );
   }
 
   return (
     <div className="grid">
-      <div className="card" style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>{catalogSummary.version_label ?? "Catalog"}</h2>
-          <div className="muted" style={{ marginTop: 6 }}>
-            Status: {catalogSummary.status} | Parse: {catalogSummary.parse_status}
-          </div>
-          <div className="muted" style={{ marginTop: 6 }}>
-            {stats.approved}/{stats.total} approved | {stats.missingImage} missing images
-          </div>
-          {hasDiffSummary && (
-            <div className="muted" style={{ marginTop: 6 }}>
-              New: {parseSummary.new_items ?? 0} | Updated: {parseSummary.updated_items ?? 0} |
-              Unchanged: {parseSummary.unchanged_items ?? 0} | Removed:{" "}
-              {parseSummary.removed_items ?? 0}
-            </div>
-          )}
-          {isParserActive && (
-            <div className="muted" style={{ marginTop: 6 }}>
-              Parser is running. This page auto-refreshes every 5 seconds.
-            </div>
-          )}
-        </div>
-        <div style={{ display: "grid", alignContent: "start", gap: 8 }}>
+      {/* Header */}
+      <div className="section-header">
+        <h2 className="section-header__title">{catalogSummary.version_label ?? "Catalog"}</h2>
+        <div className="section-header__actions">
           <button
             className="button"
             onClick={publishCatalog}
@@ -222,25 +207,78 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
           >
             Publish Catalog
           </button>
-          <button className="button secondary" onClick={approveAllItems} disabled={approvingAll}>
-            {approvingAll ? "Approving..." : "Approve All Items"}
-          </button>
-          <button className="button secondary" onClick={deleteCatalog} disabled={deleting}>
-            {deleting ? "Deleting..." : "Delete Catalog"}
-          </button>
           <button className="button secondary" onClick={() => void load()}>
             Refresh
           </button>
         </div>
       </div>
-      {statusText && <div className="card">{statusText}</div>}
+
+      {/* Stat Cards */}
+      <div className="stat-grid">
+        <div className="stat-card stat-card--blue">
+          <div className="stat-card__value">{stats.total}</div>
+          <div className="stat-card__label">Total Items</div>
+        </div>
+        <div className="stat-card stat-card--green">
+          <div className="stat-card__value">{stats.approved}</div>
+          <div className="stat-card__label">Approved</div>
+        </div>
+        <div className="stat-card stat-card--orange">
+          <div className="stat-card__value">{stats.missingImage}</div>
+          <div className="stat-card__label">Missing Images</div>
+        </div>
+        {hasDiffSummary && (
+          <div className="stat-card stat-card--purple">
+            <div className="stat-card__value">
+              {(parseSummary.new_items ?? 0) + (parseSummary.updated_items ?? 0)}
+            </div>
+            <div className="stat-card__label">Changes (new + updated)</div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="button secondary" onClick={approveAllItems} disabled={approvingAll}>
+          {approvingAll ? "Approving..." : "Approve All Items"}
+        </button>
+        <button
+          className="button secondary"
+          onClick={deleteCatalog}
+          disabled={deleting}
+          style={{ borderColor: "var(--red)", color: "var(--red)" }}
+        >
+          {deleting ? "Deleting..." : "Delete Catalog"}
+        </button>
+      </div>
+
+      {isParserActive && (
+        <span className="badge badge--processing">
+          <span className="badge__dot" />
+          Parser is running. Auto-refreshing every 5 seconds.
+        </span>
+      )}
+
+      {/* Status Message */}
+      {statusText && (
+        <span className={`badge ${statusText.includes("failed") || statusText.includes("Failed") ? "badge--error" : "badge--success"}`}>
+          <span className="badge__dot" />
+          {statusText}
+        </span>
+      )}
+
+      {/* Parser Job Info */}
       {lastParserJob && (
         <div className="card">
-          <div>
-            Last parser job: <strong>{lastParserJob.status}</strong> | Attempts:{" "}
-            {lastParserJob.attempts}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span>Last parser job:</span>
+            <span className={`badge badge--${lastParserJob.status === "success" ? "success" : lastParserJob.status === "failed" ? "error" : "processing"}`}>
+              <span className="badge__dot" />
+              {lastParserJob.status}
+            </span>
+            <span className="muted">Attempts: {lastParserJob.attempts}</span>
           </div>
-          <div className="muted" style={{ marginTop: 4 }}>
+          <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
             Queued: {new Date(lastParserJob.created_at).toLocaleString()}
             {lastParserJob.started_at
               ? ` | Started: ${new Date(lastParserJob.started_at).toLocaleString()}`
@@ -250,135 +288,150 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
               : ""}
           </div>
           {lastParserJob.error_log && (
-            <div className="pill red" style={{ marginTop: 8 }}>
+            <span className="badge badge--error" style={{ marginTop: 8 }}>
+              <span className="badge__dot" />
               {lastParserJob.error_log}
-            </div>
+            </span>
           )}
         </div>
       )}
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Image</th>
-              <th>SKU</th>
-              <th>Name</th>
-              <th>UPC</th>
-              <th>Pack</th>
-              <th>Category</th>
-              <th>Change</th>
-              <th>Issues</th>
-              <th>Approved</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td style={{ minWidth: 140 }}>
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt={item.name}
-                      width={64}
-                      height={64}
-                      style={{ borderRadius: 6, objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div className="pill red">Missing image</div>
-                  )}
-                  <div style={{ marginTop: 8 }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          void replaceImage(item, file);
-                        }
-                      }}
-                    />
-                  </div>
-                </td>
-                <td>{item.sku}</td>
-                <td style={{ minWidth: 220 }}>
-                  <input
-                    className="input"
-                    value={item.name}
-                    onChange={(e) =>
-                      setItems((prev) =>
-                        prev.map((x) =>
-                          x.id === item.id ? { ...x, name: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    onBlur={(e) => void updateItem(item.id, { name: e.target.value })}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="input"
-                    value={item.upc ?? ""}
-                    onChange={(e) =>
-                      setItems((prev) =>
-                        prev.map((x) =>
-                          x.id === item.id ? { ...x, upc: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    onBlur={(e) => void updateItem(item.id, { upc: e.target.value || null })}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="input"
-                    value={item.pack ?? ""}
-                    onChange={(e) =>
-                      setItems((prev) =>
-                        prev.map((x) =>
-                          x.id === item.id ? { ...x, pack: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    onBlur={(e) => void updateItem(item.id, { pack: e.target.value || null })}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="input"
-                    value={item.category}
-                    onChange={(e) =>
-                      setItems((prev) =>
-                        prev.map((x) =>
-                          x.id === item.id ? { ...x, category: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
-                  />
-                </td>
-                <td>
-                  <span className={`pill ${item.change_type === "unchanged" ? "green" : "red"}`}>
-                    {item.change_type ?? "new"}
-                  </span>
-                </td>
-                <td style={{ maxWidth: 180 }}>
-                  {(item.parse_issues ?? []).length ? (
-                    <div className="pill red">{item.parse_issues.join(", ")}</div>
-                  ) : (
-                    <div className="pill green">none</div>
-                  )}
-                </td>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={item.approved}
-                    onChange={(e) => void updateItem(item.id, { approved: e.target.checked })}
-                  />
-                </td>
+
+      {/* Items Table */}
+      <div className="table-container">
+        <div className="table-container__body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Image</th>
+                <th>SKU</th>
+                <th>Name</th>
+                <th>UPC</th>
+                <th>Pack</th>
+                <th>Category</th>
+                <th>Change</th>
+                <th>Issues</th>
+                <th>Approved</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td style={{ minWidth: 140 }}>
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        width={64}
+                        height={64}
+                        style={{ borderRadius: 6, objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span className="badge badge--error">
+                        <span className="badge__dot" />
+                        Missing
+                      </span>
+                    )}
+                    <div style={{ marginTop: 8 }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            void replaceImage(item, file);
+                          }
+                        }}
+                      />
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{item.sku}</td>
+                  <td style={{ minWidth: 220 }}>
+                    <input
+                      className="input"
+                      value={item.name}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id ? { ...x, name: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => void updateItem(item.id, { name: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      value={item.upc ?? ""}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id ? { ...x, upc: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => void updateItem(item.id, { upc: e.target.value || null })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      value={item.pack ?? ""}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id ? { ...x, pack: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => void updateItem(item.id, { pack: e.target.value || null })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      value={item.category}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id ? { ...x, category: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <span className={`badge badge--${item.change_type === "unchanged" ? "unchanged" : item.change_type === "updated" ? "updated" : "new"}`}>
+                      <span className="badge__dot" />
+                      {item.change_type ?? "new"}
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: 180 }}>
+                    {(item.parse_issues ?? []).length ? (
+                      <span className="badge badge--error">
+                        <span className="badge__dot" />
+                        {item.parse_issues.join(", ")}
+                      </span>
+                    ) : (
+                      <span className="badge badge--success">
+                        <span className="badge__dot" />
+                        none
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={item.approved}
+                      onChange={(e) => void updateItem(item.id, { approved: e.target.checked })}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

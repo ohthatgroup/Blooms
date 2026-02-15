@@ -132,37 +132,56 @@ export function OrderEditClient({
 
   return (
     <div className="grid">
+      {/* Stat Cards */}
+      <div className="stat-grid">
+        <div className="stat-card stat-card--blue">
+          <div className="stat-card__value">{totals.skus}</div>
+          <div className="stat-card__label">Unique SKUs</div>
+        </div>
+        <div className="stat-card stat-card--green">
+          <div className="stat-card__value">{totals.cases}</div>
+          <div className="stat-card__label">Total Cases</div>
+        </div>
+      </div>
+
+      {/* Customer Name + Save */}
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Edit Order</h2>
-        <div className="grid" style={{ gap: 8 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Customer Name</span>
+        <div className="form-section">
+          <div className="form-group">
+            <label className="form-label">Customer Name</label>
             <input
               className="input"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
             />
-          </label>
-          <div className="muted">
-            {totals.skus} SKUs | {totals.cases} total cases
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button className="button" onClick={saveOrder} disabled={saving}>
               {saving ? "Saving..." : "Save Order"}
             </button>
+            {message && (
+              <span className={`badge ${message.includes("Failed") || message.includes("failed") || message.includes("required") ? "badge--error" : "badge--success"}`}>
+                <span className="badge__dot" />
+                {message}
+              </span>
+            )}
           </div>
-          {message && <div className="muted">{message}</div>}
         </div>
       </div>
 
+      {/* Add Product */}
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Add Product</h3>
-        <input
-          className="input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by SKU, name, or UPC..."
-        />
+        <div className="form-group">
+          <input
+            className="input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by SKU, name, or UPC..."
+          />
+          <div className="form-hint">Showing up to 30 results</div>
+        </div>
         <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
           {addableProducts.map((product) => (
             <button
@@ -175,60 +194,69 @@ export function OrderEditClient({
             </button>
           ))}
           {addableProducts.length === 0 && (
-            <div className="muted">No matching products to add.</div>
+            <div className="empty-state" style={{ padding: "24px 16px" }}>
+              <p className="empty-state__title">No matching products</p>
+              <p className="empty-state__description">Try a different search term or all products may already be added.</p>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Product</th>
-              <th>UPC</th>
-              <th>Pack</th>
-              <th>Category</th>
-              <th>Qty</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {sortedItems.map((item) => (
-              <tr key={item.sku}>
-                <td>{item.sku}</td>
-                <td>{item.product_name}</td>
-                <td>{item.upc ?? ""}</td>
-                <td>{item.pack ?? ""}</td>
-                <td>{item.category}</td>
-                <td style={{ maxWidth: 120 }}>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    value={item.qty}
-                    onChange={(e) => {
-                      const next = Math.max(0, parseInt(e.target.value || "0", 10) || 0);
-                      setItems((prev) =>
-                        prev.map((row) =>
-                          row.sku === item.sku ? { ...row, qty: next } : row,
-                        ),
-                      );
-                    }}
-                  />
-                </td>
-                <td>
-                  <button
-                    className="button secondary"
-                    onClick={() => removeProduct(item.sku)}
-                  >
-                    Remove
-                  </button>
-                </td>
+      {/* Items Table */}
+      <div className="table-container">
+        <div className="table-container__header">
+          <h3 style={{ margin: 0 }}>Order Items</h3>
+        </div>
+        <div className="table-container__body">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Product</th>
+                <th>UPC</th>
+                <th>Pack</th>
+                <th>Category</th>
+                <th>Qty</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedItems.map((item) => (
+                <tr key={item.sku}>
+                  <td style={{ fontWeight: 600 }}>{item.sku}</td>
+                  <td>{item.product_name}</td>
+                  <td>{item.upc ?? ""}</td>
+                  <td>{item.pack ?? ""}</td>
+                  <td>{item.category}</td>
+                  <td style={{ maxWidth: 120 }}>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={item.qty}
+                      onChange={(e) => {
+                        const next = Math.max(0, parseInt(e.target.value || "0", 10) || 0);
+                        setItems((prev) =>
+                          prev.map((row) =>
+                            row.sku === item.sku ? { ...row, qty: next } : row,
+                          ),
+                        );
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      className="button secondary"
+                      onClick={() => removeProduct(item.sku)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

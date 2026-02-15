@@ -1,12 +1,9 @@
-import { requireAdminPage } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { AdminNav } from "@/components/admin-nav";
 import { LinksManagerClient } from "@/components/admin/links-manager-client";
 import { AppBaseUrlError, resolveAppBaseUrl } from "@/lib/url";
 import { headers } from "next/headers";
 
 export default async function AdminOrdersPage() {
-  await requireAdminPage();
   const admin = createSupabaseAdminClient();
 
   let baseUrl = "";
@@ -79,8 +76,15 @@ export default async function AdminOrdersPage() {
 
   return (
     <div className="container grid">
-      <AdminNav />
-      {baseUrlError && <div className="card">{baseUrlError}</div>}
+      <div className="section-header">
+        <h2 className="section-header__title">Orders &amp; Links</h2>
+      </div>
+      {baseUrlError && (
+        <span className="badge badge--error">
+          <span className="badge__dot" />
+          {baseUrlError}
+        </span>
+      )}
       <LinksManagerClient
         publishedCatalogs={catalogs ?? []}
         initialLinks={initialLinks}

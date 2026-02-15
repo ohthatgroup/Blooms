@@ -56,10 +56,9 @@ export function CatalogUploadPanel() {
   }
 
   return (
-    <form className="card grid" onSubmit={onSubmit}>
-      <h2 style={{ margin: 0 }}>Upload Catalog PDF</h2>
-      <label style={{ display: "grid", gap: 6 }}>
-        <span>Catalog Version Label</span>
+    <form className="card card--prominent form-section" onSubmit={onSubmit}>
+      <div className="form-group">
+        <label className="form-label">Catalog Version Label</label>
         <input
           className="input"
           placeholder="e.g. BLOOMS CATALOG 2.10.2026"
@@ -67,9 +66,9 @@ export function CatalogUploadPanel() {
           onChange={(e) => setVersionLabel(e.target.value)}
           required
         />
-      </label>
-      <label style={{ display: "grid", gap: 6 }}>
-        <span>PDF File</span>
+      </div>
+      <div className="form-group">
+        <label className="form-label">PDF File</label>
         <input
           className="input"
           type="file"
@@ -77,8 +76,13 @@ export function CatalogUploadPanel() {
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           required
         />
-      </label>
-      {message && <div className="muted">{message}</div>}
+      </div>
+      {message && (
+        <span className={`badge ${message.startsWith("Upload failed") || message.startsWith("Catalog create failed") ? "badge--error" : "badge--success"}`}>
+          <span className="badge__dot" />
+          {message}
+        </span>
+      )}
       <button className="button" disabled={busy || !file}>
         {busy ? "Uploading..." : "Upload + Queue Parse"}
       </button>
