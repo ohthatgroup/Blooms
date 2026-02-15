@@ -20,6 +20,7 @@ interface CatalogItemRow {
   image_url: string;
   parse_issues: string[];
   approved: boolean;
+  deal: string | null;
   change_type?: "new" | "updated" | "unchanged";
 }
 
@@ -308,6 +309,7 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                 <th>UPC</th>
                 <th>Pack</th>
                 <th>Category</th>
+                <th>Deal</th>
                 <th>Change</th>
                 <th>Issues</th>
                 <th>Approved</th>
@@ -399,6 +401,21 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                         )
                       }
                       onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="input"
+                      value={item.deal ?? ""}
+                      placeholder="e.g. Buy 3 Get 1 Free"
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id ? { ...x, deal: e.target.value || null } : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => void updateItem(item.id, { deal: e.target.value || null })}
                     />
                   </td>
                   <td>

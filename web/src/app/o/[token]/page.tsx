@@ -34,7 +34,7 @@ export default async function CustomerOrderPage({
 
   const { data: items } = await admin
     .from("catalog_items")
-    .select("sku,name,upc,pack,category,image_storage_path,display_order")
+    .select("sku,name,upc,pack,category,image_storage_path,display_order,deal")
     .eq("catalog_id", link.catalog_id)
     .order("display_order", { ascending: true })
     .order("category", { ascending: true })
@@ -50,6 +50,7 @@ export default async function CustomerOrderPage({
       ? getPublicProductImageUrl(item.image_storage_path)
       : "",
     displayOrder: item.display_order ?? 0,
+    deal: item.deal ?? "",
   }));
 
   const { data: liveOrder } = await admin

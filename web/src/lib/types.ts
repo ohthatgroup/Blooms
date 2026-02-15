@@ -45,6 +45,7 @@ export interface CatalogItem {
   signature?: string;
   quick_fingerprint?: string | null;
   change_type?: "new" | "updated" | "unchanged";
+  deal?: string | null;
   display_order?: number;
   source_page_no?: number | null;
   source_top?: number | null;
@@ -115,4 +116,5 @@ export interface ProductForOrder {
   category: string;
   imageUrl: string;
   displayOrder: number;
+  deal: string;
 }

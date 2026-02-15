@@ -202,6 +202,11 @@ export function OrderClient({
               <div className="cardMeta">
                 {product.pack} &middot; {product.upc}
               </div>
+              {product.deal && (
+                <div className="cardDeal">
+                  {product.deal}
+                </div>
+              )}
               <div className="cardImageWrap">
                 {product.imageUrl ? (
                   <img

@@ -83,23 +83,10 @@ export async function DELETE(
 
   const { id } = await context.params;
 
-  const { error: itemsError } = await auth.admin
-    .from("order_items")
-    .delete()
-    .eq("order_id", id);
-
-  if (itemsError) {
-    return NextResponse.json(
-      { error: "Failed to delete order items", details: itemsError.message },
-      { status: 500 },
-    );
-  }
-
   const { error } = await auth.admin
     .from("orders")
     .delete()
-    .eq("id", id)
-    .is("archived_at", null);
+    .eq("id", id);
 
   if (error) {
     return NextResponse.json(

@@ -12,6 +12,7 @@ export const patchCatalogItemSchema = z.object({
   category: z.string().min(1).optional(),
   image_storage_path: z.string().min(1).optional(),
   approved: z.boolean().optional(),
+  deal: z.string().nullable().optional(),
 });
 
 export const createCustomerLinkSchema = z.object({
