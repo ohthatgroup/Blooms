@@ -99,12 +99,11 @@ export function LinksManagerClient({
   return (
     <div className="grid">
       {/* Create Link Form */}
-      <form className="card card--prominent form-section" onSubmit={createLink}>
-        <h2 style={{ margin: 0 }}>Create Customer Order Link</h2>
-        <div className="form-group">
-          <label className="form-label">Catalog Version</label>
+      <form className="card" onSubmit={createLink}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
           <select
             className="input"
+            style={{ flex: "0 0 200px" }}
             value={catalogId}
             onChange={(e) => setCatalogId(e.target.value)}
             required
@@ -115,21 +114,20 @@ export function LinksManagerClient({
               </option>
             ))}
           </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Customer Name</label>
           <input
             className="input"
+            style={{ flex: "1 1 200px" }}
+            placeholder="Customer name"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             required
           />
+          <button className="button" style={{ flex: "0 0 auto" }} disabled={!catalogId}>
+            Generate Link
+          </button>
         </div>
-        <button className="button" disabled={!catalogId}>
-          Generate Link
-        </button>
         {(message || lastCreatedUrl) && (
-          <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
             {message ? (
               <span className={`badge ${message.includes("Failed") || message.includes("failed") ? "badge--error" : "badge--success"}`}>
                 <span className="badge__dot" />

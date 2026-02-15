@@ -19,7 +19,7 @@ export function OrderDeleteButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      "Archive this order? It will be hidden from the dashboard.",
+      "Permanently delete this order? This cannot be undone.",
     );
     if (!confirmed) return;
 
@@ -31,7 +31,7 @@ export function OrderDeleteButton({
     setBusy(false);
 
     if (!response.ok) {
-      window.alert(body.error || "Failed to archive order");
+      window.alert(body.error || "Failed to delete order");
       return;
     }
 

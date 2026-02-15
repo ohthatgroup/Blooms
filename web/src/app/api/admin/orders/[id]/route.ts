@@ -82,16 +82,28 @@ export async function DELETE(
   if (!auth.ok) return auth.response;
 
   const { id } = await context.params;
-  const now = new Date().toISOString();
+
+  const { error: itemsError } = await auth.admin
+    .from("order_items")
+    .delete()
+    .eq("order_id", id);
+
+  if (itemsError) {
+    return NextResponse.json(
+      { error: "Failed to delete order items", details: itemsError.message },
+      { status: 500 },
+    );
+  }
+
   const { error } = await auth.admin
     .from("orders")
-    .update({ archived_at: now })
+    .delete()
     .eq("id", id)
     .is("archived_at", null);
 
   if (error) {
     return NextResponse.json(
-      { error: "Failed to archive order", details: error.message },
+      { error: "Failed to delete order", details: error.message },
       { status: 500 },
     );
   }

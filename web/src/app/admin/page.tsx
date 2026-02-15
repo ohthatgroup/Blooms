@@ -50,9 +50,6 @@ export default async function AdminPage() {
       </div>
 
       {/* Upload Section */}
-      <div className="section-header">
-        <h2 className="section-header__title">Upload New Catalog</h2>
-      </div>
       <CatalogUploadPanel />
 
       {/* Catalogs Table */}

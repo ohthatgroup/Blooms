@@ -56,36 +56,36 @@ export function CatalogUploadPanel() {
   }
 
   return (
-    <form className="card card--prominent form-section" onSubmit={onSubmit}>
-      <div className="form-group">
-        <label className="form-label">Catalog Version Label</label>
+    <form className="card" onSubmit={onSubmit}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <input
           className="input"
-          placeholder="e.g. BLOOMS CATALOG 2.10.2026"
+          style={{ flex: "1 1 200px" }}
+          placeholder="Version label, e.g. BLOOMS CATALOG 2.10.2026"
           value={versionLabel}
           onChange={(e) => setVersionLabel(e.target.value)}
           required
         />
-      </div>
-      <div className="form-group">
-        <label className="form-label">PDF File</label>
         <input
           className="input"
+          style={{ flex: "0 0 auto" }}
           type="file"
           accept="application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           required
         />
+        <button className="button" style={{ flex: "0 0 auto" }} disabled={busy || !file}>
+          {busy ? "Uploading..." : "Upload + Queue Parse"}
+        </button>
       </div>
       {message && (
-        <span className={`badge ${message.startsWith("Upload failed") || message.startsWith("Catalog create failed") ? "badge--error" : "badge--success"}`}>
-          <span className="badge__dot" />
-          {message}
-        </span>
+        <div style={{ marginTop: 8 }}>
+          <span className={`badge ${message.startsWith("Upload failed") || message.startsWith("Catalog create failed") ? "badge--error" : "badge--success"}`}>
+            <span className="badge__dot" />
+            {message}
+          </span>
+        </div>
       )}
-      <button className="button" disabled={busy || !file}>
-        {busy ? "Uploading..." : "Upload + Queue Parse"}
-      </button>
     </form>
   );
 }

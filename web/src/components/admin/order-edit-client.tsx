@@ -305,7 +305,7 @@ export function OrderEditClient({
               {saving ? "Saving..." : "Save Order"}
             </button>
             <button className="button secondary" onClick={downloadCsv} disabled={totals.skus === 0}>
-              Download CSV
+              Submit
             </button>
             <OrderDeleteButton orderId={orderId} redirectTo="/admin/orders" />
             {message && (
