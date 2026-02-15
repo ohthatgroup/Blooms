@@ -60,7 +60,7 @@ export function CatalogUploadPanel() {
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
         <input
           className="input"
-          style={{ flex: "1 1 200px" }}
+          style={{ flex: "1 1 200px", width: "auto" }}
           placeholder="Version label, e.g. BLOOMS CATALOG 2.10.2026"
           value={versionLabel}
           onChange={(e) => setVersionLabel(e.target.value)}
@@ -68,7 +68,7 @@ export function CatalogUploadPanel() {
         />
         <input
           className="input"
-          style={{ flex: "0 0 auto" }}
+          style={{ flex: "0 0 auto", width: "auto", maxWidth: 260 }}
           type="file"
           accept="application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
