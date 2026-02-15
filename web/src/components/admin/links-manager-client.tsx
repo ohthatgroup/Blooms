@@ -83,6 +83,17 @@ export function LinksManagerClient({
     await loadLinks();
   }
 
+  async function deleteLink(id: string) {
+    if (!window.confirm("Permanently delete this link and its order data? This cannot be undone.")) return;
+    const response = await fetch(`/api/admin/links/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      setMessage("Failed to delete link");
+      return;
+    }
+    setLinks((prev) => prev.filter((l) => l.id !== id));
+    setMessage("Link deleted");
+  }
+
   async function toggleLink(id: string, active: boolean) {
     const response = await fetch(`/api/admin/links/${id}`, {
       method: "PATCH",
@@ -244,6 +255,13 @@ export function LinksManagerClient({
                           >
                             {link.active ? "Disable" : "Enable"}
                           </button>
+                          <button
+                            className="button secondary"
+                            style={{ color: "var(--red)" }}
+                            onClick={() => void deleteLink(link.id)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -316,6 +334,13 @@ export function LinksManagerClient({
                     onClick={() => void toggleLink(link.id, link.active)}
                   >
                     {link.active ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    className="button secondary"
+                    style={{ color: "var(--red)" }}
+                    onClick={() => void deleteLink(link.id)}
+                  >
+                    Delete
                   </button>
                 </div>
               </div>
