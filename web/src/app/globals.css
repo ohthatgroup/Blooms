@@ -7,6 +7,7 @@
   --green: #1a7a3a;
   --green-dark: #0d5a28;
   --red: #c62828;
+  --maroon: #7b1a2c;
 }
 
 * {
@@ -106,39 +107,128 @@ a {
   color: var(--red);
 }
 
-.productRow {
+.productGrid {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
 }
 
-.productQty {
+.productCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  background: white;
+  transition: box-shadow 0.15s ease;
+}
+
+.productCard:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.productCard.hasQty {
+  background: #e8f5e9;
+  border-color: var(--green);
+}
+
+.cardSku {
+  font-weight: 700;
+  color: var(--maroon);
+  font-size: 14px;
+}
+
+.cardName {
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.cardMeta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.cardImageWrap {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  min-height: 120px;
+  margin: 8px 0;
 }
 
-.productImage {
+.cardImageWrap img {
+  max-height: 140px;
+  max-width: 100%;
+  object-fit: contain;
   cursor: zoom-in;
 }
 
-@media (max-width: 640px) {
+.cardQtyControls {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.cardAddBtn {
+  width: 100%;
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: white;
+  padding: 8px 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cardAddBtn:hover {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+}
+
+.cardQtyRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+@media (max-width: 1024px) {
+  .productGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .productGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
   .container {
     padding: 14px;
   }
 
-  .productRow {
-    grid-template-columns: 56px 1fr;
-    align-items: start;
+  .productGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 
-  .productQty {
-    grid-column: 2 / -1;
-    margin-top: 6px;
-    justify-content: flex-start;
+  .productCard {
+    padding: 8px;
+  }
+
+  .cardImageWrap {
+    min-height: 90px;
+  }
+
+  .cardImageWrap img {
+    max-height: 100px;
   }
 }

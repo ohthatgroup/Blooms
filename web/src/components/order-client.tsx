@@ -189,62 +189,66 @@ export function OrderClient({
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 10 }}>
-        <div className="grid">
-          {filteredProducts.map((product) => {
-            const qty = quantities[product.sku] ?? 0;
-            return (
-              <div
-                key={product.sku}
-                className="productRow"
-                style={{ background: qty > 0 ? "#e8f5e9" : "white" }}
-              >
+      <div className="productGrid" style={{ marginBottom: 10 }}>
+        {filteredProducts.map((product) => {
+          const qty = quantities[product.sku] ?? 0;
+          return (
+            <div
+              key={product.sku}
+              className={`productCard${qty > 0 ? " hasQty" : ""}`}
+            >
+              <div className="cardSku">{product.sku}</div>
+              <div className="cardName">{product.name}</div>
+              <div className="cardMeta">
+                {product.pack} &middot; {product.upc}
+              </div>
+              <div className="cardImageWrap">
                 {product.imageUrl ? (
                   <img
-                    className="productImage"
                     src={product.imageUrl}
                     alt={product.name}
-                    width={48}
-                    height={48}
-                    style={{ objectFit: "cover", borderRadius: 6 }}
                     onClick={() => setZoomed({ url: product.imageUrl, alt: product.name })}
                   />
                 ) : (
-                  <div style={{ width: 48, height: 48, borderRadius: 6, background: "#eee" }} />
+                  <div style={{ width: 80, height: 80, borderRadius: 6, background: "#eee" }} />
                 )}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: "var(--green)" }}>{product.sku}</div>
-                  <div>{product.name}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {product.pack} • {product.upc} • {product.category}
-                  </div>
-                </div>
-                <div className="productQty">
-                  <button
-                    className="button secondary"
-                    onClick={() => setQty(product.sku, qty - 1)}
-                  >
-                    -
-                  </button>
-                  <input
-                    className="input"
-                    style={{ width: 56, textAlign: "center" }}
-                    type="number"
-                    min={0}
-                    value={qty || ""}
-                    onChange={(e) => setQty(product.sku, e.target.value)}
-                  />
-                  <button
-                    className="button secondary"
-                    onClick={() => setQty(product.sku, qty + 1)}
-                  >
-                    +
-                  </button>
-                </div>
               </div>
-            );
-          })}
-        </div>
+              <div className="cardQtyControls">
+                {qty === 0 ? (
+                  <button
+                    className="cardAddBtn"
+                    onClick={() => setQty(product.sku, 1)}
+                  >
+                    + Add
+                  </button>
+                ) : (
+                  <div className="cardQtyRow">
+                    <button
+                      className="button secondary"
+                      onClick={() => setQty(product.sku, qty - 1)}
+                    >
+                      -
+                    </button>
+                    <input
+                      className="input"
+                      style={{ width: 56, textAlign: "center" }}
+                      type="number"
+                      min={0}
+                      value={qty}
+                      onChange={(e) => setQty(product.sku, e.target.value)}
+                    />
+                    <button
+                      className="button secondary"
+                      onClick={() => setQty(product.sku, qty + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {message && (
