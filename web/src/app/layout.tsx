@@ -10,6 +10,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Bloom Catalog Ordering",
   description: "Admin and customer ordering app for Bloom catalog PDFs",
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

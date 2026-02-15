@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/signout-button";
 
@@ -23,7 +24,9 @@ export function AdminNavigation() {
     <>
       {/* Desktop top bar */}
       <nav className="admin-nav-desktop">
-        <span className="admin-nav-desktop__brand">Bloom Admin</span>
+        <Link href="/admin" className="admin-nav-desktop__brand">
+          <Image src="/logo.png" alt="Bloom" width={120} height={68} priority style={{ height: 'auto' }} />
+        </Link>
         <div className="admin-nav-desktop__links">
           {navLinks.map((link) => (
             <Link
