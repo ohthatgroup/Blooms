@@ -45,7 +45,6 @@ export interface CatalogItem {
   signature?: string;
   quick_fingerprint?: string | null;
   change_type?: "new" | "updated" | "unchanged";
-  deal?: string | null;
   display_order?: number;
   source_page_no?: number | null;
   source_top?: number | null;
@@ -108,6 +107,21 @@ export interface ParserJob {
   total_pages?: number | null;
 }
 
+export interface CatalogDeal {
+  id: string;
+  catalog_id: string;
+  sku: string;
+  deal_text: string;
+  starts_at: string;
+  ends_at: string;
+  created_at: string;
+}
+
+export interface DealForOrder {
+  deal_text: string;
+  ends_at: string;
+}
+
 export interface ProductForOrder {
   sku: string;
   name: string;
@@ -116,5 +130,5 @@ export interface ProductForOrder {
   category: string;
   imageUrl: string;
   displayOrder: number;
-  deal: string;
+  deals: DealForOrder[];
 }

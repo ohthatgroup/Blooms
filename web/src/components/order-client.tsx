@@ -43,6 +43,7 @@ export function OrderClient({
   const [zoomed, setZoomed] = useState<{ url: string; alt: string } | null>(
     null,
   );
+  const [dealPopupSku, setDealPopupSku] = useState<string | null>(null);
 
   const categories = useMemo(
     () => Array.from(new Set(products.map((x) => x.category))),
@@ -195,17 +196,20 @@ export function OrderClient({
           return (
             <div
               key={product.sku}
-              className={`productCard${qty > 0 ? " hasQty" : ""}`}
+              className={`productCard${product.deals.length > 0 ? " hasDeal" : ""}${qty > 0 ? " hasQty" : ""}`}
             >
               <div className="cardSku">{product.sku}</div>
               <div className="cardName">{product.name}</div>
               <div className="cardMeta">
                 {product.pack} &middot; {product.upc}
               </div>
-              {product.deal && (
-                <div className="cardDeal">
-                  {product.deal}
-                </div>
+              {product.deals.length > 0 && (
+                <button
+                  className="cardDealBadge"
+                  onClick={(e) => { e.stopPropagation(); setDealPopupSku(product.sku); }}
+                >
+                  DEAL
+                </button>
               )}
               <div className="cardImageWrap">
                 {product.imageUrl ? (
@@ -335,6 +339,30 @@ export function OrderClient({
           </div>
         </div>
       )}
+
+      {dealPopupSku && (() => {
+        const p = products.find((x) => x.sku === dealPopupSku);
+        if (!p) return null;
+        return (
+          <div className="dealOverlay" onClick={() => setDealPopupSku(null)}>
+            <div className="dealPopup" onClick={(e) => e.stopPropagation()}>
+              <div className="dealPopup__header">
+                <strong>{p.name}</strong>
+                <span className="muted">{p.sku}</span>
+                <button className="dealPopup__close" onClick={() => setDealPopupSku(null)}>
+                  &times;
+                </button>
+              </div>
+              {p.deals.map((d, i) => (
+                <div key={i} className="dealPopup__row">
+                  <div>{d.deal_text}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>Valid through {d.ends_at}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {zoomed && (
         <div

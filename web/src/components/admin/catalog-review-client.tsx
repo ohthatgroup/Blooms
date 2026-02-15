@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { CatalogDeal } from "@/lib/types";
 
 interface CatalogReviewClientProps {
   catalogId: string;
@@ -20,7 +21,6 @@ interface CatalogItemRow {
   image_url: string;
   parse_issues: string[];
   approved: boolean;
-  deal: string | null;
   change_type?: "new" | "updated" | "unchanged";
 }
 
@@ -47,6 +47,10 @@ interface ParserJobState {
   finished_at: string | null;
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const router = useRouter();
   const [items, setItems] = useState<CatalogItemRow[]>([]);
@@ -57,6 +61,15 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const [catalogSummary, setCatalogSummary] = useState<CatalogSummaryState>({});
   const [lastParserJob, setLastParserJob] = useState<ParserJobState | null>(null);
 
+  // Deals state
+  const [deals, setDeals] = useState<CatalogDeal[]>([]);
+  const [newDealSku, setNewDealSku] = useState("");
+  const [newDealText, setNewDealText] = useState("");
+  const [newDealStart, setNewDealStart] = useState(todayStr());
+  const [newDealEnd, setNewDealEnd] = useState("");
+  const [skuSuggestions, setSkuSuggestions] = useState<string[]>([]);
+  const [showSkuSuggestions, setShowSkuSuggestions] = useState(false);
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,15 +79,18 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     if (!options?.silent) {
       setLoading(true);
     }
-    const [catalogRes, itemsRes] = await Promise.all([
+    const [catalogRes, itemsRes, dealsRes] = await Promise.all([
       fetch(`/api/admin/catalogs/${catalogId}`),
       fetch(`/api/admin/catalogs/${catalogId}/items`),
+      fetch(`/api/admin/deals?catalog_id=${catalogId}`),
     ]);
     const catalogBody = await catalogRes.json().catch(() => ({}));
     const itemsBody = await itemsRes.json().catch(() => ({}));
+    const dealsBody = await dealsRes.json().catch(() => ({}));
     setCatalogSummary(catalogBody.catalog ?? {});
     setLastParserJob(catalogBody.parserJob ?? null);
     setItems(itemsBody.items ?? []);
+    setDeals(dealsBody.deals ?? []);
     if (!options?.silent) {
       setLoading(false);
     }
@@ -187,6 +203,81 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     router.refresh();
   }
 
+  // --- Deal CRUD ---
+
+  async function addDeal() {
+    if (!newDealSku || !newDealText || !newDealStart || !newDealEnd) {
+      setStatusText("Please fill in all deal fields");
+      return;
+    }
+    const response = await fetch("/api/admin/deals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        catalog_id: catalogId,
+        sku: newDealSku,
+        deal_text: newDealText,
+        starts_at: newDealStart,
+        ends_at: newDealEnd,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatusText(body.error || "Failed to create deal");
+      return;
+    }
+    setDeals((prev) => [...prev, body.deal]);
+    setNewDealSku("");
+    setNewDealText("");
+    setNewDealEnd("");
+    setStatusText("Deal added");
+  }
+
+  async function updateDeal(dealId: string, patch: Record<string, unknown>) {
+    const response = await fetch(`/api/admin/deals/${dealId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setStatusText(body.error || "Failed to update deal");
+      return;
+    }
+    const body = await response.json();
+    setDeals((prev) => prev.map((d) => (d.id === dealId ? body.deal : d)));
+    setStatusText("Deal updated");
+  }
+
+  async function deleteDeal(dealId: string) {
+    if (!window.confirm("Delete this deal?")) return;
+    const response = await fetch(`/api/admin/deals/${dealId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setStatusText(body.error || "Failed to delete deal");
+      return;
+    }
+    setDeals((prev) => prev.filter((d) => d.id !== dealId));
+    setStatusText("Deal deleted");
+  }
+
+  function handleSkuInput(value: string) {
+    setNewDealSku(value);
+    if (value.length > 0) {
+      const q = value.toLowerCase();
+      const matches = items
+        .map((i) => i.sku)
+        .filter((sku) => sku.toLowerCase().includes(q))
+        .slice(0, 8);
+      setSkuSuggestions(matches);
+      setShowSkuSuggestions(matches.length > 0);
+    } else {
+      setShowSkuSuggestions(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="card" style={{ padding: 32, textAlign: "center" }}>
@@ -297,6 +388,158 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
         </div>
       )}
 
+      {/* Deals Section */}
+      <div className="table-container">
+        <div className="table-container__header" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <strong>Deals</strong>
+          <span className="badge badge--processing">
+            <span className="badge__dot" />
+            {deals.length}
+          </span>
+        </div>
+        <div style={{ padding: 16 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+            <div style={{ position: "relative", minWidth: 120 }}>
+              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>SKU</label>
+              <input
+                className="input"
+                value={newDealSku}
+                placeholder="SKU"
+                onChange={(e) => handleSkuInput(e.target.value)}
+                onFocus={() => { if (skuSuggestions.length) setShowSkuSuggestions(true); }}
+                onBlur={() => setTimeout(() => setShowSkuSuggestions(false), 150)}
+              />
+              {showSkuSuggestions && (
+                <div style={{
+                  position: "absolute", top: "100%", left: 0, right: 0,
+                  background: "var(--card)", border: "1px solid var(--border)",
+                  borderRadius: 8, zIndex: 10, maxHeight: 160, overflowY: "auto",
+                  boxShadow: "var(--shadow-md)",
+                }}>
+                  {skuSuggestions.map((sku) => (
+                    <div
+                      key={sku}
+                      style={{ padding: "6px 10px", cursor: "pointer", fontSize: 13 }}
+                      onMouseDown={() => { setNewDealSku(sku); setShowSkuSuggestions(false); }}
+                    >
+                      {sku}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Deal Text</label>
+              <input
+                className="input"
+                value={newDealText}
+                placeholder="e.g. Buy 10 get 3 free"
+                onChange={(e) => setNewDealText(e.target.value)}
+              />
+            </div>
+            <div style={{ minWidth: 140 }}>
+              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Start Date</label>
+              <input
+                className="input"
+                type="date"
+                value={newDealStart}
+                onChange={(e) => setNewDealStart(e.target.value)}
+              />
+            </div>
+            <div style={{ minWidth: 140 }}>
+              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>End Date</label>
+              <input
+                className="input"
+                type="date"
+                value={newDealEnd}
+                onChange={(e) => setNewDealEnd(e.target.value)}
+              />
+            </div>
+            <button className="button" onClick={addDeal}>Add Deal</button>
+          </div>
+
+          {deals.length === 0 ? (
+            <div className="muted" style={{ textAlign: "center", padding: 16 }}>
+              No deals yet. Add one above.
+            </div>
+          ) : (
+            <div className="table-container__body">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Deal Text</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deals.map((deal) => (
+                    <tr key={deal.id}>
+                      <td style={{ fontWeight: 600 }}>{deal.sku}</td>
+                      <td>
+                        <input
+                          className="input"
+                          value={deal.deal_text}
+                          onChange={(e) =>
+                            setDeals((prev) =>
+                              prev.map((d) =>
+                                d.id === deal.id ? { ...d, deal_text: e.target.value } : d,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => void updateDeal(deal.id, { deal_text: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          type="date"
+                          value={deal.starts_at}
+                          onChange={(e) =>
+                            setDeals((prev) =>
+                              prev.map((d) =>
+                                d.id === deal.id ? { ...d, starts_at: e.target.value } : d,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => void updateDeal(deal.id, { starts_at: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="input"
+                          type="date"
+                          value={deal.ends_at}
+                          onChange={(e) =>
+                            setDeals((prev) =>
+                              prev.map((d) =>
+                                d.id === deal.id ? { ...d, ends_at: e.target.value } : d,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => void updateDeal(deal.id, { ends_at: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="button secondary"
+                          style={{ borderColor: "var(--red)", color: "var(--red)", padding: "4px 10px", fontSize: 12 }}
+                          onClick={() => void deleteDeal(deal.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Items Table */}
       <div className="table-container">
         <div className="table-container__body">
@@ -309,7 +552,6 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                 <th>UPC</th>
                 <th>Pack</th>
                 <th>Category</th>
-                <th>Deal</th>
                 <th>Change</th>
                 <th>Issues</th>
                 <th>Approved</th>
@@ -401,21 +643,6 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                         )
                       }
                       onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="input"
-                      value={item.deal ?? ""}
-                      placeholder="e.g. Buy 3 Get 1 Free"
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id ? { ...x, deal: e.target.value || null } : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => void updateItem(item.id, { deal: e.target.value || null })}
                     />
                   </td>
                   <td>

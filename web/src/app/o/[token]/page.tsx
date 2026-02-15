@@ -34,11 +34,26 @@ export default async function CustomerOrderPage({
 
   const { data: items } = await admin
     .from("catalog_items")
-    .select("sku,name,upc,pack,category,image_storage_path,display_order,deal")
+    .select("sku,name,upc,pack,category,image_storage_path,display_order")
     .eq("catalog_id", link.catalog_id)
     .order("display_order", { ascending: true })
     .order("category", { ascending: true })
     .order("name", { ascending: true });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: deals } = await admin
+    .from("catalog_deals")
+    .select("sku,deal_text,ends_at")
+    .eq("catalog_id", link.catalog_id)
+    .lte("starts_at", today)
+    .gte("ends_at", today);
+
+  const dealMap = new Map<string, { deal_text: string; ends_at: string }[]>();
+  for (const d of deals ?? []) {
+    const list = dealMap.get(d.sku) ?? [];
+    list.push({ deal_text: d.deal_text, ends_at: d.ends_at });
+    dealMap.set(d.sku, list);
+  }
 
   const products: ProductForOrder[] = (items ?? []).map((item) => ({
     sku: item.sku,
@@ -50,7 +65,7 @@ export default async function CustomerOrderPage({
       ? getPublicProductImageUrl(item.image_storage_path)
       : "",
     displayOrder: item.display_order ?? 0,
-    deal: item.deal ?? "",
+    deals: dealMap.get(item.sku) ?? [],
   }));
 
   const { data: liveOrder } = await admin

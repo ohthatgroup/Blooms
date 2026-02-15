@@ -12,7 +12,20 @@ export const patchCatalogItemSchema = z.object({
   category: z.string().min(1).optional(),
   image_storage_path: z.string().min(1).optional(),
   approved: z.boolean().optional(),
-  deal: z.string().nullable().optional(),
+});
+
+export const createDealSchema = z.object({
+  catalog_id: z.string().uuid(),
+  sku: z.string().min(1),
+  deal_text: z.string().min(1).max(500),
+  starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const patchDealSchema = z.object({
+  deal_text: z.string().min(1).max(500).optional(),
+  starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const createCustomerLinkSchema = z.object({

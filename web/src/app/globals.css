@@ -162,15 +162,65 @@ a {
   margin-top: 4px;
 }
 
-.cardDeal {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--green);
-  background: #e8f5e9;
-  padding: 2px 8px;
+/* DEAL badge on card */
+.cardDealBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #f57c00;
+  padding: 2px 10px;
   border-radius: 6px;
-  display: inline-block;
+  border: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin-top: 4px;
+}
+
+/* Deal card background */
+.productCard.hasDeal {
+  background: #fff8e1;
+  border-color: #ffe082;
+}
+.productCard.hasDeal.hasQty {
+  background: #e8f5e9;
+}
+
+/* Deal popup overlay */
+.dealOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.dealPopup {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.dealPopup__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dealPopup__close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.dealPopup__row {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
 }
 
 .cardImageWrap {
