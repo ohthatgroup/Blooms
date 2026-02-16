@@ -107,6 +107,7 @@ export async function POST(request: Request) {
     const { error: updateOrderError } = await admin
       .from("orders")
       .update({
+        catalog_id: link.catalog_id,
         customer_name: parsed.data.customer_name,
         submitted_at: now,
         total_skus: totalSkus,

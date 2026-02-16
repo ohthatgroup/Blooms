@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pypdf import PdfReader
 from supabase import Client, create_client
 
 from parser import QuickCandidate, parse_catalog_pdf, scan_catalog_fast
@@ -22,6 +23,7 @@ LOG_LEVEL = os.environ.get("PARSER_LOG_LEVEL", "INFO")
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL.upper(), logging.INFO))
 logger = logging.getLogger("parser-worker")
+ASSUMED_ITEMS_PER_PAGE = 16
 
 
 def now_iso() -> str:
@@ -116,9 +118,10 @@ def _summarize_progress(
     failed_items: int,
     parsed_pages: int,
     total_pages: int,
+    capture_verification: dict | None = None,
 ) -> dict:
     done_items = reused_items + processed_items + failed_items
-    return {
+    summary = {
         "raw_candidates": raw_candidates,
         "unique_skus": total_items,
         "total_items": total_items,
@@ -129,6 +132,71 @@ def _summarize_progress(
         "parsed_pages": parsed_pages,
         "total_pages": total_pages,
         "progress_percent": _progress_percent(total_items, done_items),
+    }
+    if capture_verification:
+        summary.update(capture_verification)
+    return summary
+
+
+def _build_capture_verification(
+    *,
+    catalog_page_count: int,
+    candidates: list[QuickCandidate],
+    unique_sku_count: int,
+) -> dict:
+    expected_min = ((catalog_page_count - 1) * ASSUMED_ITEMS_PER_PAGE + 1) if catalog_page_count else 0
+    expected_max = catalog_page_count * ASSUMED_ITEMS_PER_PAGE
+
+    page_skus: dict[int, set[str]] = {}
+    for candidate in candidates:
+        page_skus.setdefault(candidate.page_no, set()).add(candidate.sku)
+
+    non_last_page_count_mismatches: list[dict[str, int]] = []
+    if catalog_page_count > 1:
+        for page_no in range(1, catalog_page_count):
+            page_count = len(page_skus.get(page_no, set()))
+            if page_count != ASSUMED_ITEMS_PER_PAGE:
+                non_last_page_count_mismatches.append({"page_no": page_no, "count": page_count})
+
+    last_page_item_count = len(page_skus.get(catalog_page_count, set())) if catalog_page_count else 0
+    last_page_valid = (1 <= last_page_item_count <= ASSUMED_ITEMS_PER_PAGE) if catalog_page_count else unique_sku_count == 0
+    in_expected_range = expected_min <= unique_sku_count <= expected_max if catalog_page_count else unique_sku_count == 0
+
+    capture_verification_passed = (
+        len(non_last_page_count_mismatches) == 0
+        and last_page_valid
+        and in_expected_range
+    )
+
+    if capture_verification_passed:
+        capture_verification_message = (
+            f"Verification passed: {unique_sku_count} items across {catalog_page_count} pages "
+            f"(expected range {expected_min}-{expected_max})."
+        )
+    else:
+        reasons: list[str] = []
+        if non_last_page_count_mismatches:
+            reasons.append(f"{len(non_last_page_count_mismatches)} non-last pages are not 16 items")
+        if not last_page_valid:
+            reasons.append(
+                f"last page has {last_page_item_count} items (expected 1-{ASSUMED_ITEMS_PER_PAGE})"
+            )
+        if not in_expected_range:
+            reasons.append(
+                f"total unique SKUs={unique_sku_count} outside expected range {expected_min}-{expected_max}"
+            )
+        capture_verification_message = "Verification warning: " + "; ".join(reasons)
+
+    return {
+        "catalog_page_count": catalog_page_count,
+        "assumed_items_per_page": ASSUMED_ITEMS_PER_PAGE,
+        "expected_items_min": expected_min,
+        "expected_items_max": expected_max,
+        "actual_unique_skus": unique_sku_count,
+        "non_last_page_count_mismatches": non_last_page_count_mismatches,
+        "last_page_item_count": last_page_item_count,
+        "capture_verification_passed": capture_verification_passed,
+        "capture_verification_message": capture_verification_message,
     }
 
 
@@ -246,6 +314,7 @@ def process_job(client: Client, job: dict):
         with tempfile.TemporaryDirectory(prefix="blooms-parser-") as temp_dir:
             tmp_pdf = Path(temp_dir) / "catalog.pdf"
             tmp_pdf.write_bytes(file_bytes)
+            catalog_page_count = len(PdfReader(str(tmp_pdf)).pages)
 
             fast_candidates_raw = scan_catalog_fast(tmp_pdf)
             raw_candidates = len(fast_candidates_raw)
@@ -255,7 +324,12 @@ def process_job(client: Client, job: dict):
             }
             unique_skus = [candidate.sku for candidate in fast_candidates]
             total_items = len(fast_candidates)
-            total_pages = max((candidate.page_no for candidate in fast_candidates_raw), default=0)
+            total_pages = catalog_page_count
+            capture_verification = _build_capture_verification(
+                catalog_page_count=catalog_page_count,
+                candidates=fast_candidates_raw,
+                unique_sku_count=total_items,
+            )
 
             baseline_catalog_id = _load_baseline_catalog_id(client, catalog_id)
             baseline_items = _load_baseline_items(client, baseline_catalog_id)
@@ -361,6 +435,7 @@ def process_job(client: Client, job: dict):
                 failed_items=failed_items,
                 parsed_pages=total_pages,
                 total_pages=total_pages,
+                capture_verification=capture_verification,
             )
             _update_processing_progress(
                 client,
@@ -404,6 +479,7 @@ def process_job(client: Client, job: dict):
                             failed_items=failed_items,
                             parsed_pages=total_pages,
                             total_pages=total_pages,
+                            capture_verification=capture_verification,
                         )
                         _update_processing_progress(
                             client,
@@ -496,6 +572,7 @@ def process_job(client: Client, job: dict):
                         failed_items=failed_items,
                         parsed_pages=total_pages,
                         total_pages=total_pages,
+                        capture_verification=capture_verification,
                     )
                     _update_processing_progress(
                         client,
@@ -526,6 +603,7 @@ def process_job(client: Client, job: dict):
                 failed_items=failed_items,
                 parsed_pages=total_pages,
                 total_pages=total_pages,
+                capture_verification=capture_verification,
             )
             summary = {
                 **final_progress,

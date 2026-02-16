@@ -92,6 +92,8 @@ export default async function AdminPage() {
                       raw_candidates?: number;
                       unique_skus?: number;
                       failed_items?: number;
+                      capture_verification_passed?: boolean;
+                      capture_verification_message?: string;
                     };
                     const parseProgress = Math.max(
                       0,
@@ -162,6 +164,12 @@ export default async function AdminPage() {
                               Failures: {summary.failed_items ?? 0}
                             </span>
                           )}
+                          {summary.capture_verification_passed === false && (
+                            <span className="badge badge--error" style={{ marginTop: 4 }}>
+                              <span className="badge__dot" />
+                              {summary.capture_verification_message ?? "Capture verification warning"}
+                            </span>
+                          )}
                         </td>
                         <td>{new Date(catalog.created_at).toLocaleString()}</td>
                         <td>
@@ -203,6 +211,8 @@ export default async function AdminPage() {
                 removed_items?: number;
                 raw_candidates?: number;
                 unique_skus?: number;
+                capture_verification_passed?: boolean;
+                capture_verification_message?: string;
               };
               const parseProgress = Math.max(
                 0,
@@ -267,6 +277,12 @@ export default async function AdminPage() {
                     <span className="badge badge--error" style={{ marginTop: 4 }}>
                       <span className="badge__dot" />
                       Failures: {summary.failed_items ?? 0}
+                    </span>
+                  )}
+                  {summary.capture_verification_passed === false && (
+                    <span className="badge badge--error" style={{ marginTop: 4 }}>
+                      <span className="badge__dot" />
+                      {summary.capture_verification_message ?? "Capture verification warning"}
                     </span>
                   )}
                   <div className="mobile-card__row">

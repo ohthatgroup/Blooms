@@ -109,8 +109,9 @@ export interface ParserJob {
 
 export interface CatalogDeal {
   id: string;
-  catalog_id: string;
   sku: string;
+  buy_qty: number;
+  free_qty: number;
   deal_text: string;
   starts_at: string;
   ends_at: string;
@@ -118,6 +119,8 @@ export interface CatalogDeal {
 }
 
 export interface DealForOrder {
+  buy_qty: number;
+  free_qty: number;
   deal_text: string;
   ends_at: string;
 }

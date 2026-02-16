@@ -3,6 +3,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProductForOrder } from "@/lib/types";
+import {
+  buildDealTiers,
+  getNextTierProgress,
+  normalizeQtyForDeal,
+  type QtyNormalizeMode,
+} from "@/lib/deals/order-quantity";
 
 interface OrderClientProps {
   token: string;
@@ -32,10 +38,18 @@ export function OrderClient({
     initialLiveOrder?.customer_name ?? linkCustomerName,
   );
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    const tiersBySku = new Map(
+      products.map((product) => [product.sku, buildDealTiers(product.deals)]),
+    );
     const seeded: Record<string, number> = {};
     for (const item of initialLiveOrder?.items ?? []) {
-      if (item.qty > 0) {
-        seeded[item.sku] = item.qty;
+      const normalizedQty = normalizeQtyForDeal(
+        item.qty,
+        tiersBySku.get(item.sku) ?? [],
+        "hydrate",
+      );
+      if (normalizedQty > 0) {
+        seeded[item.sku] = normalizedQty;
       }
     }
     return seeded;
@@ -52,6 +66,12 @@ export function OrderClient({
     "idle",
   );
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+
+  const dealTiersBySku = useMemo(
+    () =>
+      new Map(products.map((product) => [product.sku, buildDealTiers(product.deals)])),
+    [products],
+  );
 
   const categories = useMemo(
     () => Array.from(new Set(products.map((x) => x.category))),
@@ -119,14 +139,15 @@ export function OrderClient({
   });
   latestRef.current = { customerName, orderItems, liveOrderId, draftSignature };
 
-  function setQty(sku: string, raw: string | number) {
+  function setQty(sku: string, raw: string | number, mode: QtyNormalizeMode) {
     const next = Math.max(0, parseInt(String(raw), 10) || 0);
+    const normalized = normalizeQtyForDeal(next, dealTiersBySku.get(sku) ?? [], mode);
     setQuantities((prev) => {
       const copy = { ...prev };
-      if (next === 0) {
+      if (normalized === 0) {
         delete copy[sku];
       } else {
-        copy[sku] = next;
+        copy[sku] = normalized;
       }
       return copy;
     });
@@ -324,18 +345,37 @@ export function OrderClient({
 
       <div className="productGrid" style={{ marginBottom: 10 }}>
         {filteredProducts.map((product) => {
+          const hasDeals = product.deals.length > 0;
+          const dealTiers = dealTiersBySku.get(product.sku) ?? [];
           const qty = quantities[product.sku] ?? 0;
+          const tierProgress = getNextTierProgress(qty, dealTiers);
+          const openDealPopup = () => setDealPopupSku(product.sku);
           return (
             <div
               key={product.sku}
-              className={`productCard${product.deals.length > 0 ? " hasDeal" : ""}${qty > 0 ? " hasQty" : ""}`}
+              className={`productCard${hasDeals ? " hasDeal isDealClickable" : ""}${qty > 0 ? " hasQty" : ""}`}
+              onClick={hasDeals ? openDealPopup : undefined}
+              onKeyDown={
+                hasDeals
+                  ? (event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openDealPopup();
+                      }
+                    }
+                  : undefined
+              }
+              role={hasDeals ? "button" : undefined}
+              tabIndex={hasDeals ? 0 : undefined}
+              aria-label={hasDeals ? `View deals for ${product.name}` : undefined}
             >
               <div className="cardSku">{product.sku}</div>
               <div className="cardName">{product.name}</div>
               <div className="cardMeta">
                 {product.pack} &middot; {product.upc}
               </div>
-              {product.deals.length > 0 && (
+              {hasDeals && (
                 <button
                   className="cardDealBadge"
                   onClick={(e) => { e.stopPropagation(); setDealPopupSku(product.sku); }}
@@ -348,17 +388,20 @@ export function OrderClient({
                   <img
                     src={product.imageUrl}
                     alt={product.name}
-                    onClick={() => setZoomed({ url: product.imageUrl, alt: product.name })}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setZoomed({ url: product.imageUrl, alt: product.name });
+                    }}
                   />
                 ) : (
                   <div style={{ width: 80, height: 80, borderRadius: 6, background: "#eee" }} />
                 )}
               </div>
-              <div className="cardQtyControls">
+              <div className="cardQtyControls" onClick={(event) => event.stopPropagation()}>
                 {qty === 0 ? (
                   <button
                     className="cardAddBtn"
-                    onClick={() => setQty(product.sku, 1)}
+                    onClick={() => setQty(product.sku, 1, "increase")}
                   >
                     + Add
                   </button>
@@ -366,7 +409,7 @@ export function OrderClient({
                   <div className="cardQtyRow">
                     <button
                       className="button secondary"
-                      onClick={() => setQty(product.sku, qty - 1)}
+                      onClick={() => setQty(product.sku, qty - 1, "decrease")}
                     >
                       -
                     </button>
@@ -376,14 +419,22 @@ export function OrderClient({
                       type="number"
                       min={0}
                       value={qty}
-                      onChange={(e) => setQty(product.sku, e.target.value)}
+                      onChange={(e) => setQty(product.sku, e.target.value, "input")}
+                      onBlur={(e) => setQty(product.sku, e.target.value, "input")}
                     />
                     <button
                       className="button secondary"
-                      onClick={() => setQty(product.sku, qty + 1)}
+                      onClick={() => setQty(product.sku, qty + 1, "increase")}
                     >
                       +
                     </button>
+                  </div>
+                )}
+                {qty > 0 && hasDeals && (
+                  <div className="cardDealCounter muted">
+                    {tierProgress.hasNextTier
+                      ? `${tierProgress.remaining} left to next free tier`
+                      : "Top free tier reached"}
                   </div>
                 )}
               </div>

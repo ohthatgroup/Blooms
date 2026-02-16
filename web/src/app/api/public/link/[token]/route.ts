@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { getPublicProductImageUrl } from "@/lib/storage";
+import { formatDealText } from "@/lib/deals/matrix";
 
 export async function GET(
   _request: Request,
@@ -48,17 +49,34 @@ export async function GET(
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const { data: deals } = await admin
-    .from("catalog_deals")
-    .select("sku,deal_text,ends_at")
-    .eq("catalog_id", link.catalog_id)
-    .lte("starts_at", today)
-    .gte("ends_at", today);
+  const skuList = (items ?? []).map((item) => item.sku);
+  let deals:
+    | Array<{ sku: string; buy_qty: number; free_qty: number; ends_at: string }>
+    | null = null;
+  if (skuList.length > 0) {
+    const { data } = await admin
+      .from("deals")
+      .select("sku,buy_qty,free_qty,ends_at")
+      .in("sku", skuList)
+      .lte("starts_at", today)
+      .gte("ends_at", today)
+      .order("sku", { ascending: true })
+      .order("buy_qty", { ascending: true });
+    deals = data;
+  }
 
-  const dealMap = new Map<string, { deal_text: string; ends_at: string }[]>();
+  const dealMap = new Map<
+    string,
+    { deal_text: string; buy_qty: number; free_qty: number; ends_at: string }[]
+  >();
   for (const d of deals ?? []) {
     const list = dealMap.get(d.sku) ?? [];
-    list.push({ deal_text: d.deal_text, ends_at: d.ends_at });
+    list.push({
+      deal_text: formatDealText(d.buy_qty, d.free_qty),
+      buy_qty: d.buy_qty,
+      free_qty: d.free_qty,
+      ends_at: d.ends_at,
+    });
     dealMap.set(d.sku, list);
   }
 

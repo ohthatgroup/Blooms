@@ -14,18 +14,85 @@ export const patchCatalogItemSchema = z.object({
   approved: z.boolean().optional(),
 });
 
-export const createDealSchema = z.object({
-  catalog_id: z.string().uuid(),
-  sku: z.string().min(1),
-  deal_text: z.string().min(1).max(500),
-  starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export const patchDealSchema = z.object({
-  deal_text: z.string().min(1).max(500).optional(),
-  starts_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  ends_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+export const createDealSchema = z
+  .object({
+    sku: z.string().min(1),
+    deal_text: z.string().min(1).max(500).optional(),
+    buy_qty: z.number().int().positive().optional(),
+    free_qty: z.number().int().positive().optional(),
+    starts_at: dateStringSchema,
+    ends_at: dateStringSchema,
+  })
+  .superRefine((value, ctx) => {
+    if ((value.buy_qty === undefined) !== (value.free_qty === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "buy_qty and free_qty must be provided together.",
+      });
+    }
+    const hasNumeric = value.buy_qty !== undefined && value.free_qty !== undefined;
+    if (!hasNumeric && !value.deal_text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide deal_text or buy_qty/free_qty.",
+      });
+    }
+    if (value.starts_at > value.ends_at) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "starts_at must be on or before ends_at.",
+      });
+    }
+  });
+
+export const patchDealSchema = z
+  .object({
+    deal_text: z.string().min(1).max(500).optional(),
+    buy_qty: z.number().int().positive().optional(),
+    free_qty: z.number().int().positive().optional(),
+    starts_at: dateStringSchema.optional(),
+    ends_at: dateStringSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (Object.keys(value).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one field is required.",
+      });
+    }
+    if ((value.buy_qty === undefined) !== (value.free_qty === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "buy_qty and free_qty must be provided together.",
+      });
+    }
+    if (
+      value.starts_at !== undefined &&
+      value.ends_at !== undefined &&
+      value.starts_at > value.ends_at
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "starts_at must be on or before ends_at.",
+      });
+    }
+  });
+
+export const importDealsSchema = z.object({
+  deals: z
+    .array(
+      z.object({
+        sku: z.string().min(1),
+        buy_qty: z.number().int().positive(),
+        free_qty: z.number().int().positive(),
+        starts_at: dateStringSchema,
+        ends_at: dateStringSchema,
+      }),
+    )
+    .min(1),
+  source_file: z.string().max(300).optional(),
 });
 
 export const createCustomerLinkSchema = z.object({
@@ -33,9 +100,19 @@ export const createCustomerLinkSchema = z.object({
   customer_name: z.string().min(1).max(200),
 });
 
-export const patchCustomerLinkSchema = z.object({
-  active: z.boolean(),
-});
+export const patchCustomerLinkSchema = z
+  .object({
+    active: z.boolean().optional(),
+    catalog_id: z.string().uuid().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.active === undefined && value.catalog_id === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one field is required.",
+      });
+    }
+  });
 
 export const submitOrderSchema = z.object({
   token: z.string().min(10),

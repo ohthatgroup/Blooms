@@ -12,6 +12,7 @@ interface CatalogOption {
 interface LinkRow {
   id: string;
   token: string;
+  catalog_id: string;
   customer_name: string;
   active: boolean;
   created_at: string;
@@ -38,6 +39,11 @@ export function LinksManagerClient({
   const [links, setLinks] = useState<LinkRow[]>(initialLinks);
   const [message, setMessage] = useState("");
   const [lastCreatedUrl, setLastCreatedUrl] = useState<string>("");
+  const [catalogDraftByLinkId, setCatalogDraftByLinkId] = useState<
+    Record<string, string>
+  >(() =>
+    Object.fromEntries(initialLinks.map((link) => [link.id, link.catalog_id])),
+  );
 
   async function copyToClipboard(text: string) {
     if (!text) return;
@@ -57,7 +63,25 @@ export function LinksManagerClient({
       setMessage(body.error || "Failed to load links");
       return;
     }
-    setLinks(body.links ?? []);
+    const nextLinks = body.links ?? [];
+    setLinks(nextLinks);
+    setCatalogDraftByLinkId(
+      Object.fromEntries(nextLinks.map((link: LinkRow) => [link.id, link.catalog_id])),
+    );
+  };
+
+  const catalogOptionForLink = (link: LinkRow) => {
+    const options = [...publishedCatalogs];
+    if (
+      link.catalog_id &&
+      !options.some((catalog) => catalog.id === link.catalog_id)
+    ) {
+      options.unshift({
+        id: link.catalog_id,
+        version_label: link.catalogs?.version_label ?? "Current catalog",
+      });
+    }
+    return options;
   };
 
   async function createLink(event: FormEvent) {
@@ -103,6 +127,42 @@ export function LinksManagerClient({
     if (!response.ok) {
       setMessage("Failed to update link");
       return;
+    }
+    await loadLinks();
+  }
+
+  async function updateLinkCatalog(id: string) {
+    const nextCatalogId = catalogDraftByLinkId[id];
+    if (!nextCatalogId) {
+      setMessage("Select a catalog first");
+      return;
+    }
+
+    const response = await fetch(`/api/admin/links/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ catalog_id: nextCatalogId }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(body.error || "Failed to update link catalog");
+      return;
+    }
+
+    const migration = body.migration as
+      | {
+          kept_count?: number;
+          dropped_count?: number;
+          dropped_skus?: string[];
+        }
+      | undefined;
+
+    if (migration) {
+      setMessage(
+        `Catalog updated. Kept ${migration.kept_count ?? 0} items, dropped ${migration.dropped_count ?? 0} items.`,
+      );
+    } else {
+      setMessage("Catalog updated");
     }
     await loadLinks();
   }
@@ -236,6 +296,33 @@ export function LinksManagerClient({
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: 8 }}>
+                          <select
+                            className="input"
+                            style={{ minWidth: 170 }}
+                            value={catalogDraftByLinkId[link.id] ?? link.catalog_id}
+                            onChange={(e) =>
+                              setCatalogDraftByLinkId((prev) => ({
+                                ...prev,
+                                [link.id]: e.target.value,
+                              }))
+                            }
+                          >
+                            {catalogOptionForLink(link).map((catalog) => (
+                              <option key={catalog.id} value={catalog.id}>
+                                {catalog.version_label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="button secondary"
+                            onClick={() => void updateLinkCatalog(link.id)}
+                            disabled={
+                              (catalogDraftByLinkId[link.id] ?? link.catalog_id) ===
+                              link.catalog_id
+                            }
+                          >
+                            Update Catalog
+                          </button>
                           {link.order_id ? (
                             <>
                               <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
@@ -316,6 +403,31 @@ export function LinksManagerClient({
                   </div>
                 )}
                 <div className="mobile-card__actions">
+                  <select
+                    className="input"
+                    value={catalogDraftByLinkId[link.id] ?? link.catalog_id}
+                    onChange={(e) =>
+                      setCatalogDraftByLinkId((prev) => ({
+                        ...prev,
+                        [link.id]: e.target.value,
+                      }))
+                    }
+                  >
+                    {catalogOptionForLink(link).map((catalog) => (
+                      <option key={catalog.id} value={catalog.id}>
+                        {catalog.version_label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="button secondary"
+                    onClick={() => void updateLinkCatalog(link.id)}
+                    disabled={
+                      (catalogDraftByLinkId[link.id] ?? link.catalog_id) === link.catalog_id
+                    }
+                  >
+                    Update Catalog
+                  </button>
                   {link.order_id ? (
                     <>
                       <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>

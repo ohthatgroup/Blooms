@@ -136,6 +136,15 @@ a {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
+.productCard.isDealClickable {
+  cursor: pointer;
+}
+
+.productCard.isDealClickable:focus-visible {
+  outline: 2px solid #f57c00;
+  outline-offset: 2px;
+}
+
 .productCard.hasQty {
   background: #e8f5e9;
   border-color: var(--green);
@@ -265,6 +274,12 @@ a {
   align-items: center;
   justify-content: center;
   gap: 4px;
+}
+
+.cardDealCounter {
+  margin-top: 6px;
+  font-size: 12px;
+  min-height: 16px;
 }
 
 @media (max-width: 1024px) {

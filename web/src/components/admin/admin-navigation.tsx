@@ -8,6 +8,7 @@ import { SignOutButton } from "@/components/signout-button";
 const navLinks = [
   { href: "/admin", label: "Catalogs" },
   { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/deals", label: "Deals" },
 ];
 
 export function AdminNavigation() {
@@ -16,6 +17,7 @@ export function AdminNavigation() {
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin" || pathname.startsWith("/admin/catalogs");
     if (href === "/admin/orders") return pathname.startsWith("/admin/orders");
+    if (href === "/admin/deals") return pathname.startsWith("/admin/deals");
     return false;
   }
 
@@ -63,6 +65,17 @@ export function AdminNavigation() {
             <line x1="16" y1="17" x2="8" y2="17" />
           </svg>
           <span>Orders</span>
+        </Link>
+        <Link
+          href="/admin/deals"
+          className={`admin-nav-mobile__tab${isActive("/admin/deals") ? " admin-nav-mobile__tab--active" : ""}`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9l9-6 9 6-9 6-9-6z" />
+            <path d="M9 22V12l6-3v10" />
+            <path d="M3 13l9 6 9-6" />
+          </svg>
+          <span>Deals</span>
         </Link>
       </nav>
     </>

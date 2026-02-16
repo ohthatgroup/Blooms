@@ -24,7 +24,7 @@ interface CatalogItemRow {
   change_type?: "new" | "updated" | "unchanged";
 }
 
-interface CatalogSummaryState {
+  interface CatalogSummaryState {
   version_label?: string;
   parse_status?: string;
   status?: string;
@@ -34,6 +34,8 @@ interface CatalogSummaryState {
     unchanged_items?: number;
     removed_items?: number;
     baseline_catalog_id?: string | null;
+    capture_verification_passed?: boolean;
+    capture_verification_message?: string;
   };
 }
 
@@ -106,6 +108,7 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const parseSummary = catalogSummary.parse_summary ?? {};
   const isParserActive =
     catalogSummary.parse_status === "queued" || catalogSummary.parse_status === "processing";
+  const hasCaptureVerificationWarning = parseSummary.capture_verification_passed === false;
   const hasDiffSummary =
     typeof parseSummary.new_items === "number" ||
     typeof parseSummary.updated_items === "number" ||
@@ -348,6 +351,13 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
         <span className="badge badge--processing">
           <span className="badge__dot" />
           Parser is running. Auto-refreshing every 5 seconds.
+        </span>
+      )}
+
+      {hasCaptureVerificationWarning && (
+        <span className="badge badge--error">
+          <span className="badge__dot" />
+          {parseSummary.capture_verification_message ?? "Capture verification warning"}
         </span>
       )}
 
