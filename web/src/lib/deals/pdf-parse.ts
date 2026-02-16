@@ -16,22 +16,34 @@ interface PdfJsPageTextContent {
   items: PdfJsTextItem[];
 }
 
+const SUPPRESSED_PDF_WARNINGS: RegExp[] = [
+  /TT:\s*undefined function/i,
+  /Cannot load "@napi-rs\/canvas"/i,
+  /Cannot polyfill `DOMMatrix`/i,
+  /Cannot polyfill `ImageData`/i,
+  /Cannot polyfill `Path2D`/i,
+];
+
+function shouldSuppressPdfWarning(message: string): boolean {
+  return SUPPRESSED_PDF_WARNINGS.some((pattern) => pattern.test(message));
+}
+
 async function extractPositionedPages(buffer: Buffer): Promise<{
   pages: PositionedTextPage[];
   rawText: string;
 }> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-
   const originalWarn = console.warn;
   console.warn = (...args: unknown[]) => {
     const message = args.map((value) => String(value)).join(" ");
-    if (message.includes("TT: undefined function")) {
+    if (shouldSuppressPdfWarning(message)) {
       return;
     }
     originalWarn(...args);
   };
 
   try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       verbosity: pdfjs.VerbosityLevel.ERRORS,
