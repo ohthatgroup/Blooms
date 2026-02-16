@@ -91,21 +91,6 @@ async function ensurePdfJsPolyfills() {
     return;
   }
 
-  try {
-    const canvas = await import("@napi-rs/canvas");
-    if (typeof globalScope.DOMMatrix === "undefined" && canvas.DOMMatrix) {
-      globalScope.DOMMatrix = canvas.DOMMatrix as unknown as typeof DOMMatrix;
-    }
-    if (typeof globalScope.ImageData === "undefined" && canvas.ImageData) {
-      globalScope.ImageData = canvas.ImageData as unknown as typeof ImageData;
-    }
-    if (typeof globalScope.Path2D === "undefined" && canvas.Path2D) {
-      globalScope.Path2D = canvas.Path2D as unknown as typeof Path2D;
-    }
-  } catch {
-    // Optional native package; ignore load failures and continue with JS fallback.
-  }
-
   if (typeof globalScope.DOMMatrix === "undefined") {
     try {
       const dommatrix = await import("@thednp/dommatrix");

@@ -3,7 +3,8 @@ import path from "node:path";
 
 const nextConfig: NextConfig = {
   turbopack: {
-    root: path.resolve(__dirname),
+    // Keep Turbopack root aligned with Next's tracing root in monorepo deploys.
+    root: path.resolve(__dirname, ".."),
   },
 };
 
