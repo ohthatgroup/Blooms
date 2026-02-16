@@ -107,6 +107,37 @@ async function ensurePdfJsPolyfills() {
   installMinimalPath2DPolyfill();
 }
 
+async function ensurePdfJsWorkerHandler() {
+  const globalScope = globalThis as typeof globalThis & {
+    pdfjsWorker?: {
+      WorkerMessageHandler?: unknown;
+    };
+  };
+
+  if (globalScope.pdfjsWorker?.WorkerMessageHandler) {
+    return;
+  }
+
+  try {
+    const workerModule = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    const handler = (
+      workerModule as unknown as {
+        WorkerMessageHandler?: unknown;
+      }
+    ).WorkerMessageHandler;
+    if (handler) {
+      globalScope.pdfjsWorker = { WorkerMessageHandler: handler };
+      return;
+    }
+  } catch {
+    // Keep error surface explicit below.
+  }
+
+  throw new Error(
+    "Failed to initialize pdf.js worker handler. Could not load pdf.worker.mjs in this runtime.",
+  );
+}
+
 async function extractPositionedPages(buffer: Buffer): Promise<{
   pages: PositionedTextPage[];
   rawText: string;
@@ -122,6 +153,7 @@ async function extractPositionedPages(buffer: Buffer): Promise<{
 
   try {
     await ensurePdfJsPolyfills();
+    await ensurePdfJsWorkerHandler();
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
     if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix === "undefined") {
