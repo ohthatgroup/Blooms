@@ -133,7 +133,8 @@ async function extractPositionedPages(buffer: Buffer): Promise<{
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
       verbosity: pdfjs.VerbosityLevel.ERRORS,
-    });
+      disableWorker: true,
+    } as unknown as Parameters<typeof pdfjs.getDocument>[0]);
     const document = await loadingTask.promise;
 
     const pages: PositionedTextPage[] = [];
