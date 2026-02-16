@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProductForOrder } from "@/lib/types";
 
 interface OrderClientProps {
@@ -25,6 +25,9 @@ export function OrderClient({
 }: OrderClientProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");
+  const [liveOrderId, setLiveOrderId] = useState<string | null>(
+    initialLiveOrder?.id ?? null,
+  );
   const [customerName, setCustomerName] = useState(
     initialLiveOrder?.customer_name ?? linkCustomerName,
   );
@@ -44,6 +47,11 @@ export function OrderClient({
     null,
   );
   const [dealPopupSku, setDealPopupSku] = useState<string | null>(null);
+
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   const categories = useMemo(
     () => Array.from(new Set(products.map((x) => x.category))),
@@ -83,6 +91,33 @@ export function OrderClient({
 
   const totalSkus = orderItems.length;
   const totalCases = orderItems.reduce((sum, x) => sum + x.qty, 0);
+  const canDownload = totalSkus > 0 && customerName.trim().length > 0;
+
+  const draftSignature = useMemo(() => {
+    const name = customerName.trim();
+    const items = Object.entries(quantities)
+      .filter(([, qty]) => qty > 0)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([sku, qty]) => [sku, qty] as const);
+    return JSON.stringify({ name, items });
+  }, [customerName, quantities]);
+
+  const lastSavedSigRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+  const queuedSigRef = useRef<string | null>(null);
+
+  const latestRef = useRef<{
+    customerName: string;
+    orderItems: Array<ProductForOrder & { qty: number }>;
+    liveOrderId: string | null;
+    draftSignature: string;
+  }>({
+    customerName,
+    orderItems,
+    liveOrderId,
+    draftSignature,
+  });
+  latestRef.current = { customerName, orderItems, liveOrderId, draftSignature };
 
   function setQty(sku: string, raw: string | number) {
     const next = Math.max(0, parseInt(String(raw), 10) || 0);
@@ -97,7 +132,7 @@ export function OrderClient({
     });
   }
 
-  async function submitOrder() {
+  const downloadCsv = useCallback(async () => {
     if (!orderItems.length || !customerName.trim()) return;
     setLoading(true);
     setMessage("");
@@ -125,13 +160,72 @@ export function OrderClient({
     link.download = body.file_name;
     link.click();
     URL.revokeObjectURL(objectUrl);
-    setMessage(
-      body.updated
-        ? "Order updated and CSV downloaded."
-        : "Order submitted and CSV downloaded.",
-    );
+    setMessage("Order saved and CSV downloaded.");
     setShowReview(false);
-  }
+  }, [customerName, orderItems, token]);
+
+  const saveDraft = useCallback(async (opts?: { keepalive?: boolean; signature?: string }) => {
+    const sigAtCall = opts?.signature ?? latestRef.current.draftSignature;
+    if (savingRef.current) {
+      queuedSigRef.current = sigAtCall;
+      return;
+    }
+
+    // Avoid creating empty orders until the user actually adds something.
+    if (latestRef.current.orderItems.length === 0 && latestRef.current.liveOrderId === null) {
+      lastSavedSigRef.current = sigAtCall;
+      setSaveState("idle");
+      return;
+    }
+
+    savingRef.current = true;
+    setSaveState("saving");
+
+    const trimmedName = latestRef.current.customerName.trim();
+    const payload: {
+      token: string;
+      customer_name?: string;
+      items: Array<{ sku: string; qty: number }>;
+    } = {
+      token,
+      items: latestRef.current.orderItems.map((x) => ({ sku: x.sku, qty: x.qty })),
+    };
+
+    if (trimmedName) {
+      payload.customer_name = trimmedName;
+    }
+
+    try {
+      const response = await fetch("/api/public/orders/draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: Boolean(opts?.keepalive),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSaveState("error");
+        return;
+      }
+
+      if (body.order_id && typeof body.order_id === "string") {
+        setLiveOrderId(body.order_id);
+      }
+      lastSavedSigRef.current = sigAtCall;
+      setLastSavedAt(body.updated_at ?? new Date().toISOString());
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    } finally {
+      savingRef.current = false;
+      const queued = queuedSigRef.current;
+      queuedSigRef.current = null;
+      if (queued && queued !== lastSavedSigRef.current) {
+        // Catch up immediately if changes happened during an in-flight save.
+        void saveDraft({ keepalive: false, signature: queued });
+      }
+    }
+  }, [token]);
 
   useEffect(() => {
     if (!zoomed) return;
@@ -143,6 +237,44 @@ export function OrderClient({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zoomed]);
+
+  // Debounced autosave (skip initial hydration).
+  useEffect(() => {
+    if (lastSavedSigRef.current === null) {
+      lastSavedSigRef.current = draftSignature;
+      return;
+    }
+    if (draftSignature === lastSavedSigRef.current) return;
+    if (orderItems.length === 0 && liveOrderId === null) return;
+
+    const t = window.setTimeout(() => {
+      void saveDraft({ keepalive: false, signature: draftSignature });
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [draftSignature, liveOrderId, orderItems.length, saveDraft]);
+
+  // Best-effort flush when the user hides/closes the page.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (!document.hidden) return;
+      if (lastSavedSigRef.current === null) return;
+      if (draftSignature === lastSavedSigRef.current) return;
+      if (orderItems.length === 0 && liveOrderId === null) return;
+      void saveDraft({ keepalive: true, signature: draftSignature });
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [draftSignature, liveOrderId, orderItems.length, saveDraft]);
+
+  const saveStatusText = useMemo(() => {
+    if (saveState === "saving") return "Saving...";
+    if (saveState === "error") return "Save failed (retrying)";
+    if (saveState === "saved" && lastSavedAt) {
+      return `Saved ${new Date(lastSavedAt).toLocaleTimeString()}`;
+    }
+    return "";
+  }, [lastSavedAt, saveState]);
 
   return (
     <div className="container" style={{ paddingBottom: 90 }}>
@@ -280,12 +412,13 @@ export function OrderClient({
       >
         <div className="muted" style={{ flex: 1 }}>
           {totalSkus} items • {totalCases} cases
+          {saveStatusText ? ` • ${saveStatusText}` : ""}
         </div>
         <button className="button secondary" disabled={!totalSkus} onClick={() => setShowReview(true)}>
           Review
         </button>
-        <button className="button" disabled={!totalSkus || loading} onClick={submitOrder}>
-          {loading ? "Submitting..." : "Download CSV"}
+        <button className="button" disabled={!canDownload || loading} onClick={downloadCsv}>
+          {loading ? "Downloading..." : "Download CSV"}
         </button>
       </div>
 
@@ -332,8 +465,8 @@ export function OrderClient({
               <button className="button secondary" onClick={() => setShowReview(false)}>
                 Close
               </button>
-              <button className="button" onClick={submitOrder} disabled={loading}>
-                {loading ? "Submitting..." : "Submit + Download CSV"}
+              <button className="button" onClick={downloadCsv} disabled={!canDownload || loading}>
+                {loading ? "Downloading..." : "Download CSV"}
               </button>
             </div>
           </div>

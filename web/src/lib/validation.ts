@@ -50,6 +50,20 @@ export const submitOrderSchema = z.object({
     .min(1),
 });
 
+export const saveOrderDraftSchema = z.object({
+  token: z.string().min(10),
+  customer_name: z.string().min(1).max(200).optional(),
+  items: z
+    .array(
+      z.object({
+        sku: z.string().min(2),
+        qty: z.number().int().positive(),
+      }),
+    )
+    .optional()
+    .default([]),
+});
+
 export const patchOrderSchema = z.object({
   customer_name: z.string().min(1).max(200),
   items: z
