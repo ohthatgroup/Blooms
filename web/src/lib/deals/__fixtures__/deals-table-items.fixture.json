@@ -1,0 +1,59 @@
+{
+  "rawText": "DEAL EFFECTIVE DATES FEB 1 - FEB 27, 2026",
+  "pages": [
+    {
+      "page_number": 1,
+      "items": [
+        { "str": "ITEM #", "x": 40, "y": 700, "width": 30, "height": 8 },
+        { "str": "UPC", "x": 95, "y": 700, "width": 20, "height": 8 },
+        { "str": "DESCRIPTION", "x": 200, "y": 700, "width": 60, "height": 8 },
+        { "str": "PACK/SIZE", "x": 315, "y": 700, "width": 50, "height": 8 },
+        { "str": "COST", "x": 380, "y": 700, "width": 25, "height": 8 },
+        { "str": "DEAL", "x": 418, "y": 700, "width": 25, "height": 8 },
+        { "str": "YOU PAY $", "x": 530, "y": 700, "width": 45, "height": 8 },
+
+        { "str": "LOTUS", "x": 200, "y": 682, "width": 30, "height": 8 },
+        { "str": "10+1", "x": 460, "y": 682, "width": 22, "height": 8 },
+        { "str": "50+", "x": 560, "y": 682, "width": 16, "height": 8 },
+
+        { "str": "LOT601", "x": 40, "y": 664, "width": 30, "height": 8 },
+        { "str": "5410126716016", "x": 95, "y": 664, "width": 60, "height": 8 },
+        { "str": "Lotus Biscuits 250gr", "x": 200, "y": 664, "width": 85, "height": 8 },
+        { "str": "10/250gr", "x": 315, "y": 664, "width": 35, "height": 8 },
+        { "str": "$36.00", "x": 380, "y": 664, "width": 26, "height": 8 },
+        { "str": "Buy 20", "x": 418, "y": 664, "width": 30, "height": 8 },
+        { "str": "get 4 FREE", "x": 418, "y": 656, "width": 44, "height": 8 },
+
+        { "str": "SIZGIT TORTILLA SNACKS SMALL", "x": 200, "y": 636, "width": 130, "height": 8 },
+        { "str": "5+1", "x": 460, "y": 636, "width": 16, "height": 8 },
+        { "str": "20+10", "x": 560, "y": 636, "width": 28, "height": 8 },
+
+        { "str": "SIZ024", "x": 40, "y": 618, "width": 30, "height": 8 },
+        { "str": "032797600248", "x": 95, "y": 618, "width": 55, "height": 8 },
+        { "str": "Takitos Rolled Tortilla Fire Red Hot 1oz", "x": 200, "y": 618, "width": 145, "height": 8 },
+        { "str": "60/1oz", "x": 315, "y": 618, "width": 28, "height": 8 },
+        { "str": "$45.00", "x": 380, "y": 618, "width": 26, "height": 8 },
+        { "str": "Buy 10", "x": 418, "y": 618, "width": 30, "height": 8 },
+        { "str": "get 3 FREE", "x": 418, "y": 610, "width": 44, "height": 8 },
+
+        { "str": "ITEM #", "x": 40, "y": 576, "width": 30, "height": 8 },
+        { "str": "UPC", "x": 95, "y": 576, "width": 20, "height": 8 },
+        { "str": "DESCRIPTION", "x": 200, "y": 576, "width": 60, "height": 8 },
+        { "str": "PACK/SIZE", "x": 315, "y": 576, "width": 50, "height": 8 },
+        { "str": "COST", "x": 380, "y": 576, "width": 25, "height": 8 },
+        { "str": "DEAL", "x": 418, "y": 576, "width": 25, "height": 8 },
+
+        { "str": "BLM578", "x": 40, "y": 558, "width": 30, "height": 8 },
+        { "str": "032797005784", "x": 95, "y": 558, "width": 55, "height": 8 },
+        { "str": "1 oz Corn Chips BBQ", "x": 200, "y": 558, "width": 80, "height": 8 },
+        { "str": "48/1oz", "x": 315, "y": 558, "width": 28, "height": 8 },
+        { "str": "$17.75", "x": 380, "y": 558, "width": 26, "height": 8 },
+        { "str": "Buy 15", "x": 418, "y": 558, "width": 30, "height": 8 },
+        { "str": "get 2 FREE", "x": 418, "y": 550, "width": 44, "height": 8 },
+        { "str": "Buy 30", "x": 418, "y": 542, "width": 30, "height": 8 },
+        { "str": "get 6 FREE", "x": 418, "y": 534, "width": 44, "height": 8 },
+        { "str": "Buy PALLET 60 CS+ pay $14.40", "x": 418, "y": 526, "width": 120, "height": 8 }
+      ]
+    }
+  ]
+}

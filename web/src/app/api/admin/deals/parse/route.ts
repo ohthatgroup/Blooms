@@ -22,6 +22,16 @@ export async function POST(request: Request) {
   try {
     const parsed = await parseDealsPdfBuffer(buffer);
     const skus = parsed.matrix.map((row) => row.sku);
+    const diagnostics = parsed.diagnostics ?? {
+      parsed_pages: 0,
+      table_headers_detected: 0,
+      sku_rows_detected: 0,
+      sku_rows_with_free_tiers: 0,
+      rows_skipped_non_free: 0,
+      rows_skipped_no_tiers: 0,
+      parser_engine: "pdfjs-dist",
+      used_legacy_fallback: false,
+    };
 
     let knownSkus = new Set<string>();
     if (skus.length > 0) {
@@ -49,6 +59,14 @@ export async function POST(request: Request) {
         known_skus: skus.length - unknownSkus.length,
         unknown_skus: unknownSkus.length,
         skipped_lines: parsed.skipped_lines,
+        parsed_pages: diagnostics.parsed_pages,
+        table_headers_detected: diagnostics.table_headers_detected,
+        sku_rows_detected: diagnostics.sku_rows_detected,
+        sku_rows_with_free_tiers: diagnostics.sku_rows_with_free_tiers,
+        rows_skipped_non_free: diagnostics.rows_skipped_non_free,
+        rows_skipped_no_tiers: diagnostics.rows_skipped_no_tiers,
+        parser_engine: diagnostics.parser_engine,
+        used_legacy_fallback: Boolean(diagnostics.used_legacy_fallback),
       },
       unknown_sku_list: unknownSkus.slice(0, 100),
     });
