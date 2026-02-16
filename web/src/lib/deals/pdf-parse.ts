@@ -28,6 +28,100 @@ function shouldSuppressPdfWarning(message: string): boolean {
   return SUPPRESSED_PDF_WARNINGS.some((pattern) => pattern.test(message));
 }
 
+function installMinimalImageDataPolyfill() {
+  const globalScope = globalThis as typeof globalThis & {
+    ImageData?: typeof ImageData;
+  };
+  if (typeof globalScope.ImageData !== "undefined") return;
+
+  class ImageDataPolyfill {
+    data: Uint8ClampedArray;
+    width: number;
+    height: number;
+
+    constructor(dataOrWidth: Uint8ClampedArray | number, width?: number, height?: number) {
+      if (typeof dataOrWidth === "number") {
+        this.width = dataOrWidth;
+        this.height = width ?? dataOrWidth;
+        this.data = new Uint8ClampedArray(this.width * this.height * 4);
+        return;
+      }
+
+      this.data = dataOrWidth;
+      this.width = width ?? 0;
+      this.height = height ?? 0;
+    }
+  }
+
+  globalScope.ImageData = ImageDataPolyfill as unknown as typeof ImageData;
+}
+
+function installMinimalPath2DPolyfill() {
+  const globalScope = globalThis as typeof globalThis & {
+    Path2D?: typeof Path2D;
+  };
+  if (typeof globalScope.Path2D !== "undefined") return;
+
+  class Path2DPolyfill {
+    addPath() {}
+    moveTo() {}
+    lineTo() {}
+    rect() {}
+    closePath() {}
+    arc() {}
+    quadraticCurveTo() {}
+    bezierCurveTo() {}
+  }
+
+  globalScope.Path2D = Path2DPolyfill as unknown as typeof Path2D;
+}
+
+async function ensurePdfJsPolyfills() {
+  const globalScope = globalThis as typeof globalThis & {
+    DOMMatrix?: typeof DOMMatrix;
+    ImageData?: typeof ImageData;
+    Path2D?: typeof Path2D;
+  };
+
+  if (
+    typeof globalScope.DOMMatrix !== "undefined" &&
+    typeof globalScope.ImageData !== "undefined" &&
+    typeof globalScope.Path2D !== "undefined"
+  ) {
+    return;
+  }
+
+  try {
+    const canvas = await import("@napi-rs/canvas");
+    if (typeof globalScope.DOMMatrix === "undefined" && canvas.DOMMatrix) {
+      globalScope.DOMMatrix = canvas.DOMMatrix as unknown as typeof DOMMatrix;
+    }
+    if (typeof globalScope.ImageData === "undefined" && canvas.ImageData) {
+      globalScope.ImageData = canvas.ImageData as unknown as typeof ImageData;
+    }
+    if (typeof globalScope.Path2D === "undefined" && canvas.Path2D) {
+      globalScope.Path2D = canvas.Path2D as unknown as typeof Path2D;
+    }
+  } catch {
+    // Optional native package; ignore load failures and continue with JS fallback.
+  }
+
+  if (typeof globalScope.DOMMatrix === "undefined") {
+    try {
+      const dommatrix = await import("@thednp/dommatrix");
+      const DOMMatrixCtor = dommatrix.default;
+      if (DOMMatrixCtor) {
+        globalScope.DOMMatrix = DOMMatrixCtor as unknown as typeof DOMMatrix;
+      }
+    } catch {
+      // Keep going; if DOMMatrix is still missing below, we'll fail fast with a clear error.
+    }
+  }
+
+  installMinimalImageDataPolyfill();
+  installMinimalPath2DPolyfill();
+}
+
 async function extractPositionedPages(buffer: Buffer): Promise<{
   pages: PositionedTextPage[];
   rawText: string;
@@ -42,7 +136,14 @@ async function extractPositionedPages(buffer: Buffer): Promise<{
   };
 
   try {
+    await ensurePdfJsPolyfills();
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+    if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix === "undefined") {
+      throw new Error(
+        "DOMMatrix is not available in this runtime. Install @napi-rs/canvas or provide a DOMMatrix polyfill.",
+      );
+    }
 
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(buffer),
