@@ -26,8 +26,17 @@ describe("order quantity deal normalization", () => {
   it("reports remaining qty to next free tier", () => {
     expect(getNextTierProgress(13, tiers)).toEqual({
       hasNextTier: true,
-      remaining: 14,
-      nextTargetQty: 27,
+      remaining: 7,
+      nextTargetQty: 20,
+    });
+  });
+
+  it("uses buy threshold math for single-tier counters", () => {
+    const singleTier = buildDealTiers([{ buy_qty: 20, free_qty: 13 }]);
+    expect(getNextTierProgress(1, singleTier)).toEqual({
+      hasNextTier: true,
+      remaining: 19,
+      nextTargetQty: 20,
     });
   });
 

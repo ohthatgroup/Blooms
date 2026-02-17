@@ -74,9 +74,9 @@ export function getNextTierProgress(
 ): NextTierProgress {
   const qty = clampToNonNegativeInt(currentQty);
   const nextTargetQty =
-    [...new Set(tiers.map((tier) => tier.target_qty))]
+    [...new Set(tiers.map((tier) => tier.buy_qty))]
       .sort((a, b) => a - b)
-      .find((targetQty) => targetQty > qty) ?? null;
+      .find((buyQty) => buyQty > qty) ?? null;
 
   if (nextTargetQty === null) {
     return {
