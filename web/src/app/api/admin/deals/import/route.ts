@@ -50,10 +50,44 @@ export async function POST(request: Request) {
 
   const rows = [...deduped.values()];
 
-  const { error: deleteError } = await auth.admin
+  const { data: existingDeals, error: listDealsError } = await auth.admin
     .from("deals")
-    .delete()
-    .not("id", "is", null);
+    .select("id");
+
+  if (listDealsError) {
+    return NextResponse.json(
+      {
+        error: "Failed to clear existing deals",
+        details: listDealsError.message,
+        code: listDealsError.code ?? null,
+        hint: listDealsError.hint ?? null,
+        stage: "list-existing-deals",
+      },
+      { status: 500 },
+    );
+  }
+
+  const existingDealIds = (existingDeals ?? [])
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  let deleteError: {
+    message: string;
+    code?: string | null;
+    hint?: string | null;
+  } | null = null;
+
+  for (let index = 0; index < existingDealIds.length; index += 500) {
+    const batchIds = existingDealIds.slice(index, index + 500);
+    const { error } = await auth.admin
+      .from("deals")
+      .delete()
+      .in("id", batchIds);
+    if (error) {
+      deleteError = error;
+      break;
+    }
+  }
 
   if (deleteError) {
     return NextResponse.json(
@@ -62,6 +96,7 @@ export async function POST(request: Request) {
         details: deleteError.message,
         code: deleteError.code ?? null,
         hint: deleteError.hint ?? null,
+        stage: "delete-existing-deals",
       },
       { status: 500 },
     );
