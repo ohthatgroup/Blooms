@@ -57,7 +57,12 @@ export async function POST(request: Request) {
 
   if (deleteError) {
     return NextResponse.json(
-      { error: "Failed to clear existing deals", details: deleteError.message },
+      {
+        error: "Failed to clear existing deals",
+        details: deleteError.message,
+        code: deleteError.code ?? null,
+        hint: deleteError.hint ?? null,
+      },
       { status: 500 },
     );
   }
@@ -68,7 +73,12 @@ export async function POST(request: Request) {
 
   if (insertError) {
     return NextResponse.json(
-      { error: "Failed to import deals", details: insertError.message },
+      {
+        error: "Failed to import deals",
+        details: insertError.message,
+        code: insertError.code ?? null,
+        hint: insertError.hint ?? null,
+      },
       { status: 500 },
     );
   }

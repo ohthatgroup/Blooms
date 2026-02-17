@@ -43,6 +43,9 @@ interface ParsedDealsPayload {
   unknown_sku_list?: string[];
   source_file?: string;
   warnings?: string[];
+  details?: string;
+  hint?: string;
+  code?: string;
 }
 
 interface DealsManagerClientProps {
@@ -79,6 +82,16 @@ export function DealsManagerClient({ initialDeals }: DealsManagerClientProps) {
     [deals],
   );
 
+  function formatErrorMessage(body: Record<string, unknown>, fallback: string): string {
+    const error = typeof body.error === "string" ? body.error : fallback;
+    const details = typeof body.details === "string" ? body.details : "";
+    const hint = typeof body.hint === "string" ? body.hint : "";
+    const parts = [error];
+    if (details) parts.push(details);
+    if (hint) parts.push(`Hint: ${hint}`);
+    return parts.join(" - ");
+  }
+
   async function loadDeals() {
     const response = await fetch("/api/admin/deals");
     const body = await response.json().catch(() => ({}));
@@ -108,7 +121,7 @@ export function DealsManagerClient({ initialDeals }: DealsManagerClientProps) {
     const body = await response.json().catch(() => ({}));
     setParsing(false);
     if (!response.ok) {
-      setMessage(body.error || "Failed to parse PDF");
+      setMessage(formatErrorMessage(body as Record<string, unknown>, "Failed to parse PDF"));
       return;
     }
 
@@ -138,7 +151,7 @@ export function DealsManagerClient({ initialDeals }: DealsManagerClientProps) {
     const body = await response.json().catch(() => ({}));
     setImporting(false);
     if (!response.ok) {
-      setMessage(body.error || "Import failed");
+      setMessage(formatErrorMessage(body as Record<string, unknown>, "Import failed"));
       return;
     }
 
