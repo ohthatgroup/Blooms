@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import type { ProductForOrder } from "@/lib/types";
 import {
   buildDealTiers,
@@ -10,15 +10,20 @@ import {
   type QtyNormalizeMode,
 } from "@/lib/deals/order-quantity";
 
+const BarcodeScanner = lazy(() =>
+  import("@/components/barcode-scanner").then((m) => ({ default: m.BarcodeScanner })),
+);
+
 interface OrderClientProps {
   token: string;
   linkCustomerName: string;
   catalogLabel: string;
   products: ProductForOrder[];
+  showUpc?: boolean;
   initialLiveOrder: {
     id: string;
     customer_name: string;
-    items: Array<{ sku: string; qty: number }>;
+    items: Array<{ sku: string; qty: number; note?: string }>;
   } | null;
 }
 
@@ -27,6 +32,7 @@ export function OrderClient({
   linkCustomerName,
   catalogLabel,
   products,
+  showUpc = true,
   initialLiveOrder,
 }: OrderClientProps) {
   const [search, setSearch] = useState("");
@@ -60,7 +66,15 @@ export function OrderClient({
   const [zoomed, setZoomed] = useState<{ url: string; alt: string } | null>(
     null,
   );
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    const seeded: Record<string, string> = {};
+    for (const item of initialLiveOrder?.items ?? []) {
+      if (item.note) seeded[item.sku] = item.note;
+    }
+    return seeded;
+  });
   const [dealPopupSku, setDealPopupSku] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -100,14 +114,14 @@ export function OrderClient({
       .map(([sku, qty]) => {
         const product = products.find((x) => x.sku === sku);
         if (!product) return null;
-        return { ...product, qty };
+        return { ...product, qty, note: notes[sku] ?? "" };
       })
-      .filter((x): x is ProductForOrder & { qty: number } => Boolean(x))
+      .filter((x): x is ProductForOrder & { qty: number; note: string } => Boolean(x))
       .sort(
         (a, b) =>
           (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.sku.localeCompare(b.sku),
       );
-  }, [products, quantities]);
+  }, [notes, products, quantities]);
 
   const totalSkus = orderItems.length;
   const totalCases = orderItems.reduce((sum, x) => sum + x.qty, 0);
@@ -118,9 +132,9 @@ export function OrderClient({
     const items = Object.entries(quantities)
       .filter(([, qty]) => qty > 0)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([sku, qty]) => [sku, qty] as const);
+      .map(([sku, qty]) => [sku, qty, notes[sku] ?? ""] as const);
     return JSON.stringify({ name, items });
-  }, [customerName, quantities]);
+  }, [customerName, notes, quantities]);
 
   const lastSavedSigRef = useRef<string | null>(null);
   const savingRef = useRef(false);
@@ -128,7 +142,7 @@ export function OrderClient({
 
   const latestRef = useRef<{
     customerName: string;
-    orderItems: Array<ProductForOrder & { qty: number }>;
+    orderItems: Array<ProductForOrder & { qty: number; note: string }>;
     liveOrderId: string | null;
     draftSignature: string;
   }>({
@@ -146,6 +160,7 @@ export function OrderClient({
       const copy = { ...prev };
       if (normalized === 0) {
         delete copy[sku];
+        setNotes((n) => { const c = { ...n }; delete c[sku]; return c; });
       } else {
         copy[sku] = normalized;
       }
@@ -163,7 +178,7 @@ export function OrderClient({
       body: JSON.stringify({
         token,
         customer_name: customerName,
-        items: orderItems.map((x) => ({ sku: x.sku, qty: x.qty })),
+        items: orderItems.map((x) => ({ sku: x.sku, qty: x.qty, note: x.note || undefined })),
       }),
     });
     setLoading(false);
@@ -209,7 +224,7 @@ export function OrderClient({
       items: Array<{ sku: string; qty: number }>;
     } = {
       token,
-      items: latestRef.current.orderItems.map((x) => ({ sku: x.sku, qty: x.qty })),
+      items: latestRef.current.orderItems.map((x) => ({ sku: x.sku, qty: x.qty, note: x.note || undefined })),
     };
 
     if (trimmedName) {
@@ -315,13 +330,37 @@ export function OrderClient({
             onChange={(e) => setCustomerName(e.target.value)}
           />
         </label>
-        <input
-          className="input"
-          placeholder="Search by name, SKU, or UPC..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="Search by name, SKU, or UPC..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button
+            type="button"
+            className="button secondary"
+            style={{ padding: "8px 12px", fontSize: 18, lineHeight: 1 }}
+            title="Scan barcode"
+            onClick={() => setShowScanner(true)}
+          >
+            &#9783;
+          </button>
+        </div>
       </div>
+
+      {showScanner && (
+        <Suspense fallback={<div className="muted" style={{ textAlign: "center", padding: 20 }}>Loading scanner...</div>}>
+          <BarcodeScanner
+            onScan={(code) => {
+              setSearch(code);
+              setShowScanner(false);
+            }}
+            onClose={() => setShowScanner(false)}
+          />
+        </Suspense>
+      )}
 
       <div className="card" style={{ overflowX: "auto", marginBottom: 10 }}>
         <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
@@ -373,7 +412,7 @@ export function OrderClient({
               <div className="cardSku">{product.sku}</div>
               <div className="cardName">{product.name}</div>
               <div className="cardMeta">
-                {product.pack} &middot; {product.upc}
+                {product.pack}{showUpc ? <> &middot; {product.upc}</> : null}
               </div>
               {hasDeals && (
                 <button
@@ -436,6 +475,17 @@ export function OrderClient({
                       ? `${tierProgress.remaining} left to next free tier`
                       : "Top free tier reached"}
                   </div>
+                )}
+                {qty > 0 && (
+                  <input
+                    className="input cardNoteInput"
+                    placeholder="Add note..."
+                    value={notes[product.sku] ?? ""}
+                    onChange={(e) =>
+                      setNotes((prev) => ({ ...prev, [product.sku]: e.target.value }))
+                    }
+                    maxLength={500}
+                  />
                 )}
               </div>
             </div>
@@ -500,6 +550,7 @@ export function OrderClient({
                   <th>SKU</th>
                   <th>Product</th>
                   <th>Qty</th>
+                  <th>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -508,6 +559,7 @@ export function OrderClient({
                     <td>{item.sku}</td>
                     <td>{item.name}</td>
                     <td>{item.qty}</td>
+                    <td className="muted">{item.note}</td>
                   </tr>
                 ))}
               </tbody>

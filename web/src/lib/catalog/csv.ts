@@ -7,6 +7,8 @@ export interface CsvOrderItem {
   pack: string | null;
   category: string;
   qty: number;
+  note?: string | null;
+  dealNote?: string | null;
 }
 
 export function buildOrderCsv(input: {
@@ -22,15 +24,19 @@ export function buildOrderCsv(input: {
       a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
   );
 
-  const header = "Customer,Date,SKU,Product,UPC,Pack,Qty";
+  const header = "Customer,Date,SKU,Product,UPC,Pack,Qty,Note";
   const rows = sorted.map((item) => {
     const safeName = item.name.replaceAll(",", " ");
+    const combinedNote = [item.note, item.dealNote]
+      .filter(Boolean)
+      .join(" | ")
+      .replaceAll('"', '""');
     return `"${normalizedCustomer}","${format(
       date,
       "MM/dd/yyyy",
     )}","${item.sku}","${safeName}","${item.upc ?? ""}","${
       item.pack ?? ""
-    }",${item.qty}`;
+    }",${item.qty},"${combinedNote}"`;
   });
 
   const csv = [header, ...rows].join("\n");

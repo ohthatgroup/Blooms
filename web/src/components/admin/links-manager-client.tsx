@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { OrderDeleteButton } from "@/components/admin/order-delete-button";
+import { BulkImportClient } from "@/components/admin/bulk-import-client";
 
 interface CatalogOption {
   id: string;
@@ -15,6 +16,8 @@ interface LinkRow {
   catalog_id: string;
   customer_name: string;
   active: boolean;
+  show_upc?: boolean;
+  show_price?: boolean;
   created_at: string;
   catalogs?: { version_label: string };
   url: string;
@@ -44,6 +47,7 @@ export function LinksManagerClient({
   >(() =>
     Object.fromEntries(initialLinks.map((link) => [link.id, link.catalog_id])),
   );
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   async function copyToClipboard(text: string) {
     if (!text) return;
@@ -129,6 +133,21 @@ export function LinksManagerClient({
       return;
     }
     await loadLinks();
+  }
+
+  async function toggleVisibility(id: string, field: "show_upc" | "show_price", current: boolean) {
+    const response = await fetch(`/api/admin/links/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ [field]: !current }),
+    });
+    if (!response.ok) {
+      setMessage("Failed to update visibility");
+      return;
+    }
+    setLinks((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, [field]: !current } : l)),
+    );
   }
 
   async function updateLinkCatalog(id: string) {
@@ -236,8 +255,11 @@ export function LinksManagerClient({
       ) : (
         <>
           <div className="table-container">
-            <div className="table-container__header">
+            <div className="table-container__header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0 }}>Customer Links</h3>
+              <button className="button secondary" onClick={() => setShowBulkImport(true)}>
+                Bulk Import Order
+              </button>
             </div>
             <div className="table-container__body">
               <table className="table table-mobile-cards">
@@ -246,6 +268,7 @@ export function LinksManagerClient({
                     <th>Customer</th>
                     <th>Catalog</th>
                     <th>Status</th>
+                    <th>Visibility</th>
                     <th>Order</th>
                     <th>Updated</th>
                     <th>Link</th>
@@ -262,6 +285,24 @@ export function LinksManagerClient({
                           <span className="badge__dot" />
                           {link.active ? "active" : "disabled"}
                         </span>
+                      </td>
+                      <td>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={link.show_upc !== false}
+                            onChange={() => void toggleVisibility(link.id, "show_upc", link.show_upc !== false)}
+                          />
+                          UPC
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer", marginTop: 2 }}>
+                          <input
+                            type="checkbox"
+                            checked={link.show_price === true}
+                            onChange={() => void toggleVisibility(link.id, "show_price", link.show_price === true)}
+                          />
+                          Price
+                        </label>
                       </td>
                       <td>
                         {link.has_order ? (
@@ -459,6 +500,19 @@ export function LinksManagerClient({
             ))}
           </div>
         </>
+      )}
+
+      {showBulkImport && (
+        <BulkImportClient
+          catalogs={publishedCatalogs}
+          links={links.map((l) => ({
+            id: l.id,
+            customer_name: l.customer_name,
+            catalog_id: l.catalog_id,
+          }))}
+          onClose={() => setShowBulkImport(false)}
+          onSuccess={() => void loadLinks()}
+        />
       )}
     </div>
   );

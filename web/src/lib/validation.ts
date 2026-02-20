@@ -5,6 +5,17 @@ export const createCatalogSchema = z.object({
   pdfStoragePath: z.string().min(1),
 });
 
+export const createCatalogItemSchema = z.object({
+  catalog_id: z.string().uuid(),
+  sku: z.string().min(1).max(100),
+  name: z.string().min(1).max(500),
+  upc: z.string().max(100).nullable().optional(),
+  pack: z.string().max(200).nullable().optional(),
+  category: z.string().min(1).max(200),
+  price: z.number().nonnegative().nullable().optional(),
+  image_storage_path: z.string().optional(),
+});
+
 export const patchCatalogItemSchema = z.object({
   name: z.string().min(1).optional(),
   upc: z.string().nullable().optional(),
@@ -12,6 +23,7 @@ export const patchCatalogItemSchema = z.object({
   category: z.string().min(1).optional(),
   image_storage_path: z.string().min(1).optional(),
   approved: z.boolean().optional(),
+  price: z.number().nonnegative().nullable().optional(),
 });
 
 const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -104,9 +116,16 @@ export const patchCustomerLinkSchema = z
   .object({
     active: z.boolean().optional(),
     catalog_id: z.string().uuid().optional(),
+    show_upc: z.boolean().optional(),
+    show_price: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.active === undefined && value.catalog_id === undefined) {
+    if (
+      value.active === undefined &&
+      value.catalog_id === undefined &&
+      value.show_upc === undefined &&
+      value.show_price === undefined
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "At least one field is required.",
@@ -122,6 +141,7 @@ export const submitOrderSchema = z.object({
       z.object({
         sku: z.string().min(2),
         qty: z.number().int().positive(),
+        note: z.string().max(500).optional(),
       }),
     )
     .min(1),
@@ -135,6 +155,7 @@ export const saveOrderDraftSchema = z.object({
       z.object({
         sku: z.string().min(2),
         qty: z.number().int().positive(),
+        note: z.string().max(500).optional(),
       }),
     )
     .optional()
@@ -150,7 +171,38 @@ export const patchOrderSchema = z.object({
         qty: z.number().int().positive(),
         product_name: z.string().min(1).optional(),
         is_custom: z.boolean().optional(),
+        note: z.string().max(500).optional(),
       }),
     )
     .min(1),
+});
+
+export const importCatalogSchema = z.object({
+  version_label: z.string().min(1).max(120),
+  items: z
+    .array(
+      z.object({
+        sku: z.string().min(1),
+        name: z.string().min(1),
+        upc: z.string().nullable().optional(),
+        pack: z.string().nullable().optional(),
+        price: z.number().nonnegative().nullable().optional(),
+        category: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
+
+export const bulkImportOrderSchema = z.object({
+  catalog_id: z.string().uuid(),
+  customer_name: z.string().min(1).max(200),
+  items: z
+    .array(
+      z.object({
+        sku: z.string().min(1),
+        qty: z.number().int().positive(),
+      }),
+    )
+    .min(1),
+  customer_link_id: z.string().uuid().optional(),
 });

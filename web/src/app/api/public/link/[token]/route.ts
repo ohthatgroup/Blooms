@@ -12,7 +12,7 @@ export async function GET(
 
   const { data: link, error: linkError } = await admin
     .from("customer_links")
-    .select("id,catalog_id,customer_name,active")
+    .select("id,catalog_id,customer_name,active,show_upc,show_price")
     .eq("token", token)
     .single();
 
@@ -100,13 +100,13 @@ export async function GET(
     .is("archived_at", null)
     .maybeSingle();
 
-  let liveOrderItems: Array<{ sku: string; qty: number }> = [];
+  let liveOrderItems: Array<{ sku: string; qty: number; note: string }> = [];
   if (liveOrder) {
     const { data: rows } = await admin
       .from("order_items")
-      .select("sku,qty")
+      .select("sku,qty,note")
       .eq("order_id", liveOrder.id);
-    liveOrderItems = (rows ?? []).map((row) => ({ sku: row.sku, qty: row.qty }));
+    liveOrderItems = (rows ?? []).map((row) => ({ sku: row.sku, qty: row.qty, note: row.note ?? "" }));
   }
 
   return NextResponse.json({
@@ -120,6 +120,7 @@ export async function GET(
       version_label: catalog.version_label,
     },
     products,
+    show_upc: link.show_upc !== false,
     live_order: liveOrder
       ? {
           id: liveOrder.id,

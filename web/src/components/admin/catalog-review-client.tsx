@@ -22,6 +22,7 @@ interface CatalogItemRow {
   parse_issues: string[];
   approved: boolean;
   change_type?: "new" | "updated" | "unchanged";
+  price?: number | null;
 }
 
   interface CatalogSummaryState {
@@ -71,6 +72,15 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const [newDealEnd, setNewDealEnd] = useState("");
   const [skuSuggestions, setSkuSuggestions] = useState<string[]>([]);
   const [showSkuSuggestions, setShowSkuSuggestions] = useState(false);
+
+  // Add item state
+  const [addSku, setAddSku] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addUpc, setAddUpc] = useState("");
+  const [addPack, setAddPack] = useState("");
+  const [addCategory, setAddCategory] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
 
   useEffect(() => {
     void load();
@@ -279,6 +289,41 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     } else {
       setShowSkuSuggestions(false);
     }
+  }
+
+  async function addItem() {
+    if (!addSku.trim() || !addName.trim() || !addCategory.trim()) {
+      setStatusText("SKU, Name, and Category are required");
+      return;
+    }
+    setAddingItem(true);
+    const response = await fetch("/api/admin/catalog-items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        catalog_id: catalogId,
+        sku: addSku.trim(),
+        name: addName.trim(),
+        upc: addUpc.trim() || null,
+        pack: addPack.trim() || null,
+        category: addCategory.trim(),
+        price: addPrice ? parseFloat(addPrice) : null,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    setAddingItem(false);
+    if (!response.ok) {
+      setStatusText(body.error || "Failed to add item");
+      return;
+    }
+    setStatusText("Item added");
+    setAddSku("");
+    setAddName("");
+    setAddUpc("");
+    setAddPack("");
+    setAddPrice("");
+    // Keep category for convenience when adding multiple items in same category
+    await load();
   }
 
   if (loading) {
@@ -562,6 +607,7 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                 <th>UPC</th>
                 <th>Pack</th>
                 <th>Category</th>
+                <th>Price</th>
                 <th>Change</th>
                 <th>Issues</th>
                 <th>Approved</th>
@@ -655,6 +701,29 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                       onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
                     />
                   </td>
+                  <td style={{ minWidth: 90 }}>
+                    <input
+                      className="input"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.price ?? ""}
+                      placeholder="0.00"
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((x) =>
+                            x.id === item.id
+                              ? { ...x, price: e.target.value ? parseFloat(e.target.value) : null }
+                              : x,
+                          ),
+                        )
+                      }
+                      onBlur={(e) => {
+                        const val = e.target.value ? parseFloat(e.target.value) : null;
+                        void updateItem(item.id, { price: val });
+                      }}
+                    />
+                  </td>
                   <td>
                     <span className={`badge badge--${item.change_type === "unchanged" ? "unchanged" : item.change_type === "updated" ? "updated" : "new"}`}>
                       <span className="badge__dot" />
@@ -685,6 +754,40 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Add Item */}
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Add Item</h3>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div className="form-group" style={{ flex: "0 0 110px" }}>
+            <label className="form-label">SKU</label>
+            <input className="input" value={addSku} onChange={(e) => setAddSku(e.target.value)} placeholder="SKU" />
+          </div>
+          <div className="form-group" style={{ flex: "1 1 200px" }}>
+            <label className="form-label">Name</label>
+            <input className="input" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" />
+          </div>
+          <div className="form-group" style={{ flex: "0 0 130px" }}>
+            <label className="form-label">UPC</label>
+            <input className="input" value={addUpc} onChange={(e) => setAddUpc(e.target.value)} placeholder="UPC" />
+          </div>
+          <div className="form-group" style={{ flex: "0 0 110px" }}>
+            <label className="form-label">Pack</label>
+            <input className="input" value={addPack} onChange={(e) => setAddPack(e.target.value)} placeholder="Pack" />
+          </div>
+          <div className="form-group" style={{ flex: "0 0 140px" }}>
+            <label className="form-label">Category</label>
+            <input className="input" value={addCategory} onChange={(e) => setAddCategory(e.target.value)} placeholder="Category" />
+          </div>
+          <div className="form-group" style={{ flex: "0 0 90px" }}>
+            <label className="form-label">Price</label>
+            <input className="input" type="number" step="0.01" min="0" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="0.00" />
+          </div>
+          <button className="button" onClick={addItem} disabled={addingItem || !addSku.trim() || !addName.trim() || !addCategory.trim()}>
+            {addingItem ? "Adding..." : "Add"}
+          </button>
         </div>
       </div>
     </div>

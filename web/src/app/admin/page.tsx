@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { CatalogUploadPanel } from "@/components/admin/catalog-upload-panel";
+import { CatalogXlsxUpload } from "@/components/admin/catalog-xlsx-upload";
 import { CatalogDeleteButton } from "@/components/admin/catalog-delete-button";
 import { AutoRefreshWhenEnabled } from "@/components/admin/auto-refresh-when-enabled";
 
@@ -51,6 +52,7 @@ export default async function AdminPage() {
 
       {/* Upload Section */}
       <CatalogUploadPanel />
+      <CatalogXlsxUpload />
 
       {/* Catalogs Table */}
       <div className="section-header">

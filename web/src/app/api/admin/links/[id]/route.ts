@@ -77,6 +77,13 @@ export async function PATCH(
     updates.disabled_at = parsed.data.active ? null : new Date().toISOString();
   }
 
+  if (parsed.data.show_upc !== undefined) {
+    updates.show_upc = parsed.data.show_upc;
+  }
+  if (parsed.data.show_price !== undefined) {
+    updates.show_price = parsed.data.show_price;
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({
       link: existingLink,

@@ -10,6 +10,7 @@ interface OrderEditItem {
   pack: string | null;
   category: string;
   qty: number;
+  note: string;
   is_custom?: boolean;
 }
 
@@ -122,6 +123,7 @@ export function OrderEditClient({
         pack: product.pack,
         category: product.category,
         qty: 1,
+        note: "",
       },
     ]);
     setSearch("");
@@ -145,6 +147,7 @@ export function OrderEditClient({
         pack: null,
         category: "Custom",
         qty: customQty,
+        note: "",
         is_custom: true,
       },
     ]);
@@ -163,10 +166,12 @@ export function OrderEditClient({
     const now = new Date();
     const dateStr = `${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()}`;
     const name = customerName.trim() || "Customer";
-    const header = "Customer,Date,SKU,Product,UPC,Pack,Qty";
+    const header = "Customer,Date,SKU,Product,UPC,Pack,Qty,Note";
     const rows = sorted.map(
-      (item) =>
-        `"${name}","${dateStr}","${item.sku}","${item.product_name.replaceAll(",", " ")}","${item.upc ?? ""}","${item.pack ?? ""}",${item.qty}`,
+      (item) => {
+        const safeNote = (item.note ?? "").replaceAll('"', '""');
+        return `"${name}","${dateStr}","${item.sku}","${item.product_name.replaceAll(",", " ")}","${item.upc ?? ""}","${item.pack ?? ""}",${item.qty},"${safeNote}"`;
+      },
     );
     const csv = [header, ...rows].join("\n");
     const fileDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -187,8 +192,8 @@ export function OrderEditClient({
       .filter((item) => item.qty > 0)
       .map((item) =>
         item.is_custom
-          ? { sku: item.sku, qty: item.qty, product_name: item.product_name, is_custom: true as const }
-          : { sku: item.sku, qty: item.qty },
+          ? { sku: item.sku, qty: item.qty, product_name: item.product_name, is_custom: true as const, note: item.note || undefined }
+          : { sku: item.sku, qty: item.qty, note: item.note || undefined },
       );
 
     if (!customerName.trim() || payloadItems.length === 0) {
@@ -348,6 +353,7 @@ export function OrderEditClient({
                 <th>Pack</th>
                 <th>Category</th>
                 <th>Qty</th>
+                <th>Note</th>
                 <th />
               </tr>
             </thead>
@@ -375,6 +381,22 @@ export function OrderEditClient({
                         setItems((prev) =>
                           prev.map((row) =>
                             row.sku === item.sku ? { ...row, qty: next } : row,
+                          ),
+                        );
+                      }}
+                    />
+                  </td>
+                  <td style={{ minWidth: 140 }}>
+                    <input
+                      className="input"
+                      placeholder="Note..."
+                      value={item.note}
+                      maxLength={500}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItems((prev) =>
+                          prev.map((row) =>
+                            row.sku === item.sku ? { ...row, note: val } : row,
                           ),
                         );
                       }}

@@ -168,6 +168,7 @@ export async function POST(request: Request) {
         pack: p.pack ?? "",
         category: p.category,
         qty: entry.qty,
+        note: entry.note || null,
       };
     });
 

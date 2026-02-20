@@ -15,7 +15,7 @@ export default async function CustomerOrderPage({
 
   const { data: link } = await admin
     .from("customer_links")
-    .select("id,catalog_id,customer_name,active")
+    .select("id,catalog_id,customer_name,active,show_upc")
     .eq("token", token)
     .single();
 
@@ -93,13 +93,13 @@ export default async function CustomerOrderPage({
     .is("archived_at", null)
     .maybeSingle();
 
-  let liveOrderItems: Array<{ sku: string; qty: number }> = [];
+  let liveOrderItems: Array<{ sku: string; qty: number; note: string }> = [];
   if (liveOrder) {
     const { data: rows } = await admin
       .from("order_items")
-      .select("sku,qty")
+      .select("sku,qty,note")
       .eq("order_id", liveOrder.id);
-    liveOrderItems = (rows ?? []).map((row) => ({ sku: row.sku, qty: row.qty }));
+    liveOrderItems = (rows ?? []).map((row) => ({ sku: row.sku, qty: row.qty, note: row.note ?? "" }));
   }
 
   return (
@@ -108,6 +108,7 @@ export default async function CustomerOrderPage({
       linkCustomerName={link.customer_name}
       catalogLabel={catalog.version_label}
       products={products}
+      showUpc={link.show_upc !== false}
       initialLiveOrder={
         liveOrder
           ? {

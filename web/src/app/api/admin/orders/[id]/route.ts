@@ -3,6 +3,7 @@ import { requireAdminApi } from "@/lib/auth";
 import { patchOrderSchema } from "@/lib/validation";
 import { buildOrderCsv } from "@/lib/catalog/csv";
 import { uploadOrderCsv } from "@/lib/storage";
+import { buildDealNoteMap } from "@/lib/deals/csv-note";
 
 export async function GET(
   _request: Request,
@@ -27,7 +28,7 @@ export async function GET(
 
   const { data: items, error: itemsError } = await auth.admin
     .from("order_items")
-    .select("sku,product_name,upc,pack,category,qty")
+    .select("sku,product_name,upc,pack,category,qty,note")
     .eq("order_id", id)
     .order("category", { ascending: true })
     .order("product_name", { ascending: true });
@@ -166,6 +167,7 @@ export async function PATCH(
         pack: product.pack ?? "",
         category: product.category,
         qty: entry.qty,
+        note: entry.note || null,
       };
     }),
     ...customItems.map((entry) => ({
@@ -175,6 +177,7 @@ export async function PATCH(
       pack: "",
       category: "Custom",
       qty: entry.qty,
+      note: entry.note || null,
     })),
   ];
   const totalSkus = orderItems.length;
@@ -211,6 +214,19 @@ export async function PATCH(
     );
   }
 
+  const allSkus = orderItems.map((item) => item.sku);
+  const today = new Date().toISOString().slice(0, 10);
+  let dealNoteMap = new Map<string, string>();
+  if (allSkus.length > 0) {
+    const { data: deals } = await auth.admin
+      .from("deals")
+      .select("sku,buy_qty,free_qty")
+      .in("sku", allSkus)
+      .lte("starts_at", today)
+      .gte("ends_at", today);
+    if (deals) dealNoteMap = buildDealNoteMap(deals);
+  }
+
   const { csv } = buildOrderCsv({
     customerName: parsed.data.customer_name,
     items: orderItems.map((item) => ({
@@ -220,6 +236,8 @@ export async function PATCH(
       pack: item.pack,
       category: item.category,
       qty: item.qty,
+      note: item.note,
+      dealNote: dealNoteMap.get(item.sku) ?? null,
     })),
   });
 

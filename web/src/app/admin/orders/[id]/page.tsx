@@ -24,7 +24,7 @@ export default async function AdminOrderEditPage({
 
   const { data: items } = await admin
     .from("order_items")
-    .select("sku,product_name,upc,pack,category,qty")
+    .select("sku,product_name,upc,pack,category,qty,note")
     .eq("order_id", id)
     .order("category", { ascending: true })
     .order("product_name", { ascending: true });
@@ -49,9 +49,10 @@ export default async function AdminOrderEditPage({
         initialCustomerName={order.customer_name}
         initialItems={(() => {
           const catalogSkus = new Set((catalogProducts ?? []).map((p) => p.sku));
-          return (items ?? []).map((item) =>
-            catalogSkus.has(item.sku) ? item : { ...item, is_custom: true },
-          );
+          return (items ?? []).map((item) => {
+            const base = { ...item, note: item.note ?? "" };
+            return catalogSkus.has(item.sku) ? base : { ...base, is_custom: true };
+          });
         })()}
         catalogProducts={catalogProducts ?? []}
       />

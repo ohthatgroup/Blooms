@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.admin
     .from("customer_links")
     .select(
-      "id,token,catalog_id,customer_name,active,created_at,disabled_at,catalogs!inner(version_label)",
+      "id,token,catalog_id,customer_name,active,show_upc,show_price,created_at,disabled_at,catalogs!inner(version_label)",
     )
     .order("created_at", { ascending: false });
 

@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(npx next build:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(node -e:*)",
+      "Bash(npx --yes xlsx-cli --help)",
+      "Bash(npx xlsx-cli:*)",
+      "Bash(node:*)",
+      "Bash(del:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build)"
     ]
   }
 }

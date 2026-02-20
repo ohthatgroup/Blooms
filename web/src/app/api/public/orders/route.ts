@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { submitOrderSchema } from "@/lib/validation";
 import { buildOrderCsv } from "@/lib/catalog/csv";
 import { uploadOrderCsv } from "@/lib/storage";
+import { buildDealNoteMap } from "@/lib/deals/csv-note";
 
 export async function POST(request: Request) {
   const payload = await request.json().catch(() => null);
@@ -80,6 +81,7 @@ export async function POST(request: Request) {
       pack: product.pack ?? "",
       category: product.category,
       qty: entry.qty,
+      note: entry.note || null,
     };
   });
 
@@ -163,6 +165,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+  let dealNoteMap = new Map<string, string>();
+  if (requestedSkus.length > 0) {
+    const { data: deals } = await admin
+      .from("deals")
+      .select("sku,buy_qty,free_qty")
+      .in("sku", requestedSkus)
+      .lte("starts_at", today)
+      .gte("ends_at", today);
+    if (deals) dealNoteMap = buildDealNoteMap(deals);
+  }
+
   const { csv, fileName } = buildOrderCsv({
     customerName: parsed.data.customer_name,
     items: orderItems.map((item) => ({
@@ -172,6 +186,8 @@ export async function POST(request: Request) {
       pack: item.pack,
       category: item.category,
       qty: item.qty,
+      note: item.note,
+      dealNote: dealNoteMap.get(item.sku) ?? null,
     })),
   });
 

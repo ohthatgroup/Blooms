@@ -48,6 +48,7 @@ export interface CatalogItem {
   display_order?: number;
   source_page_no?: number | null;
   source_top?: number | null;
+  price?: number | null;
   updated_at: string;
 }
 
@@ -57,6 +58,8 @@ export interface CustomerLink {
   catalog_id: string;
   customer_name: string;
   active: boolean;
+  show_upc: boolean;
+  show_price: boolean;
   created_by: string;
   created_at: string;
   disabled_at: string | null;
@@ -85,6 +88,7 @@ export interface OrderItem {
   pack: string | null;
   category: string;
   qty: number;
+  note: string | null;
 }
 
 export interface ParserJob {
