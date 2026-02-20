@@ -9,7 +9,13 @@
       "Bash(node:*)",
       "Bash(del:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "mcp__19df6dc2-355b-4016-a56c-d5d8ae55709a__list_projects",
+      "mcp__19df6dc2-355b-4016-a56c-d5d8ae55709a__list_migrations",
+      "mcp__19df6dc2-355b-4016-a56c-d5d8ae55709a__get_logs",
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
     ]
   }
 }

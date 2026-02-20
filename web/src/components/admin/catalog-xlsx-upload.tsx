@@ -4,8 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseCatalogFile, type ParsedCatalogItem } from "@/lib/catalog/xlsx-parse";
 
-export function CatalogXlsxUpload() {
+interface CatalogOption {
+  id: string;
+  version_label: string;
+}
+
+interface CatalogXlsxUploadProps {
+  catalogs?: CatalogOption[];
+}
+
+export function CatalogXlsxUpload({ catalogs = [] }: CatalogXlsxUploadProps) {
   const router = useRouter();
+  const [mode, setMode] = useState<"new" | "update">("new");
+  const [existingCatalogId, setExistingCatalogId] = useState(catalogs[0]?.id ?? "");
   const [versionLabel, setVersionLabel] = useState("");
   const [items, setItems] = useState<ParsedCatalogItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -29,50 +40,109 @@ export function CatalogXlsxUpload() {
   }
 
   async function submit() {
-    if (!versionLabel.trim() || items.length === 0) return;
+    if (items.length === 0) return;
+    if (mode === "new" && !versionLabel.trim()) return;
+    if (mode === "update" && !existingCatalogId) return;
+
     setUploading(true);
     setMessage("");
+
+    const body: Record<string, unknown> = {
+      version_label: mode === "update"
+        ? catalogs.find((c) => c.id === existingCatalogId)?.version_label ?? "Update"
+        : versionLabel.trim(),
+      items: items.map((i) => ({
+        sku: i.sku,
+        name: i.name,
+        upc: i.upc,
+        pack: i.pack,
+        price: i.price,
+        category: i.category,
+      })),
+    };
+    if (mode === "update") {
+      body.catalog_id = existingCatalogId;
+    }
 
     const response = await fetch("/api/admin/catalogs/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        version_label: versionLabel.trim(),
-        items: items.map((i) => ({
-          sku: i.sku,
-          name: i.name,
-          upc: i.upc,
-          pack: i.pack,
-          price: i.price,
-          category: i.category,
-        })),
-      }),
+      body: JSON.stringify(body),
     });
-    const body = await response.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({}));
     setUploading(false);
 
     if (!response.ok) {
-      setMessage(body.error || "Failed to import catalog");
+      setMessage(data.error || "Failed to import catalog");
       return;
     }
 
-    router.push(`/admin/catalogs/${body.catalog_id}`);
-    router.refresh();
+    if (data.is_update) {
+      setMessage(
+        `Updated ${data.updated_count} items, added ${data.inserted_count} new items`,
+      );
+      router.refresh();
+    } else {
+      router.push(`/admin/catalogs/${data.catalog_id}`);
+      router.refresh();
+    }
   }
 
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Import from CSV/XLSX</h3>
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
-        <div className="form-group" style={{ flex: "1 1 200px" }}>
-          <label className="form-label">Version Label</label>
-          <input
-            className="input"
-            placeholder="e.g. Spring 2026"
-            value={versionLabel}
-            onChange={(e) => setVersionLabel(e.target.value)}
-          />
+
+      {/* Mode toggle */}
+      {catalogs.length > 0 && (
+        <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input
+              type="radio"
+              name="importMode"
+              checked={mode === "new"}
+              onChange={() => setMode("new")}
+            />
+            New catalog
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input
+              type="radio"
+              name="importMode"
+              checked={mode === "update"}
+              onChange={() => setMode("update")}
+            />
+            Update existing catalog
+          </label>
         </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 12 }}>
+        {mode === "new" ? (
+          <div className="form-group" style={{ flex: "1 1 200px" }}>
+            <label className="form-label">Version Label</label>
+            <input
+              className="input"
+              placeholder="e.g. Spring 2026"
+              value={versionLabel}
+              onChange={(e) => setVersionLabel(e.target.value)}
+            />
+          </div>
+        ) : (
+          <div className="form-group" style={{ flex: "1 1 200px" }}>
+            <label className="form-label">Catalog to Update</label>
+            <select
+              className="input"
+              value={existingCatalogId}
+              onChange={(e) => setExistingCatalogId(e.target.value)}
+            >
+              {catalogs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.version_label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="form-group" style={{ flex: "1 1 200px" }}>
           <label className="form-label">File</label>
           <input
@@ -91,6 +161,9 @@ export function CatalogXlsxUpload() {
         <div style={{ marginBottom: 12 }}>
           <div className="muted" style={{ marginBottom: 8 }}>
             {items.length} items in {categories.length} categories from {fileName}
+            {mode === "update" && (
+              <> — matching SKUs will be updated, new SKUs will be added</>
+            )}
           </div>
 
           {warnings.length > 0 && (
@@ -142,9 +215,17 @@ export function CatalogXlsxUpload() {
           <button
             className="button"
             onClick={submit}
-            disabled={uploading || !versionLabel.trim()}
+            disabled={
+              uploading ||
+              (mode === "new" && !versionLabel.trim()) ||
+              (mode === "update" && !existingCatalogId)
+            }
           >
-            {uploading ? "Importing..." : `Import ${items.length} Items`}
+            {uploading
+              ? "Importing..."
+              : mode === "update"
+                ? `Update Catalog with ${items.length} Items`
+                : `Import ${items.length} Items`}
           </button>
         </div>
       )}

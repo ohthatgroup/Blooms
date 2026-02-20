@@ -161,8 +161,25 @@ export function parseCatalogFile(
     });
   }
 
+  // Deduplicate by SKU – keep the last occurrence (latest row wins)
+  const seenSkus = new Map<string, number>();
+  const deduped: ParsedCatalogItem[] = [];
+  for (const item of items) {
+    const key = item.sku.toLowerCase();
+    if (seenSkus.has(key)) {
+      const prevIdx = seenSkus.get(key)!;
+      warnings.push(
+        `Duplicate SKU "${item.sku}" at row ${item.rowNum} (first seen row ${deduped[prevIdx].rowNum}), keeping latest`,
+      );
+      deduped[prevIdx] = item;
+    } else {
+      seenSkus.set(key, deduped.length);
+      deduped.push(item);
+    }
+  }
+
   return {
-    items,
+    items: deduped,
     categories: Array.from(categorySet),
     warnings,
   };

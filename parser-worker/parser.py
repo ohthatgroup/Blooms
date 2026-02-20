@@ -48,7 +48,7 @@ HEADER_LINES = {
     "www.bloomskosher.com",
 }
 
-SKU_RE = re.compile(r"^[A-Z][A-Z0-9\-/]{2,}\d{2,}$")
+SKU_RE = re.compile(r"^[A-Z][A-Z0-9\-/]{2,}\d+$")
 PACK_HINT_RE = re.compile(r"(\d+\s*/\s*[\w.\- ]+)|(oz|gr|g|lb|pc)", re.I)
 STRONG_PACK_RE = re.compile(r"\d+\s*[/-]\s*[\w.\- ]+", re.I)
 

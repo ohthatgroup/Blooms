@@ -179,6 +179,7 @@ export const patchOrderSchema = z.object({
 
 export const importCatalogSchema = z.object({
   version_label: z.string().min(1).max(120),
+  catalog_id: z.string().uuid().optional(),
   items: z
     .array(
       z.object({

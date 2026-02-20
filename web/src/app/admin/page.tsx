@@ -52,7 +52,11 @@ export default async function AdminPage() {
 
       {/* Upload Section */}
       <CatalogUploadPanel />
-      <CatalogXlsxUpload />
+      <CatalogXlsxUpload
+        catalogs={catalogList
+          .filter((c) => !c.parse_status || c.parse_status === "complete" || c.parse_status === "needs_review")
+          .map((c) => ({ id: c.id, version_label: c.version_label }))}
+      />
 
       {/* Catalogs Table */}
       <div className="section-header">
