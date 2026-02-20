@@ -23,6 +23,7 @@ interface OrderClientProps {
   products: ProductForOrder[];
   showUpc?: boolean;
   debugScan?: boolean;
+  debugSession?: string;
   initialLiveOrder: {
     id: string;
     customer_name: string;
@@ -37,6 +38,7 @@ export function OrderClient({
   products,
   showUpc = true,
   debugScan = false,
+  debugSession = "",
   initialLiveOrder,
 }: OrderClientProps) {
   const [search, setSearch] = useState("");
@@ -141,6 +143,33 @@ export function OrderClient({
     };
   }, [products]);
 
+  const activeDebugSession = useMemo(() => debugSession.trim(), [debugSession]);
+
+  const postScanDebugRemote = useCallback(
+    (source: string, message: string, details?: Record<string, unknown>) => {
+      if (!debugScan || !activeDebugSession) return;
+      const pageUrl =
+        typeof window === "undefined" ? undefined : window.location.href;
+      void fetch("/api/public/debug/scan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          session_id: activeDebugSession,
+          source,
+          event_type: source,
+          message,
+          details,
+          page_url: pageUrl,
+        }),
+        keepalive: true,
+      }).catch(() => {
+        // Ignore remote ingest failures; local debug panel still records events.
+      });
+    },
+    [activeDebugSession, debugScan, token],
+  );
+
   const pushScanDebug = useCallback(
     (source: string, message: string, details?: Record<string, unknown>) => {
       if (!debugScan) return;
@@ -150,8 +179,9 @@ export function OrderClient({
         return next.slice(-20);
       });
       console.debug("[scan-debug]", source, message, details ?? {});
+      postScanDebugRemote(source, message, details);
     },
-    [debugScan],
+    [debugScan, postScanDebugRemote],
   );
 
   const orderItems = useMemo(() => {
@@ -319,6 +349,14 @@ export function OrderClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zoomed]);
 
+  useEffect(() => {
+    if (!debugScan) return;
+    pushScanDebug("order-client", "Debug mode enabled", {
+      session: activeDebugSession || null,
+      remoteStreamEnabled: Boolean(activeDebugSession),
+    });
+  }, [activeDebugSession, debugScan, pushScanDebug]);
+
   // Debounced autosave (skip initial hydration).
   useEffect(() => {
     if (lastSavedSigRef.current === null) {
@@ -378,6 +416,11 @@ export function OrderClient({
     [products, pushScanDebug],
   );
 
+  const handleScannerOpen = useCallback(() => {
+    setShowScanner(true);
+    pushScanDebug("order-client", "Scanner opened");
+  }, [pushScanDebug]);
+
   const handleScannerClose = useCallback(() => {
     setShowScanner(false);
     pushScanDebug("order-client", "Scanner closed by user");
@@ -421,7 +464,7 @@ export function OrderClient({
             className="button secondary"
             style={{ padding: "8px 12px", fontSize: 18, lineHeight: 1 }}
             title="Scan barcode"
-            onClick={() => setShowScanner(true)}
+            onClick={handleScannerOpen}
           >
             &#9783;
           </button>
@@ -434,6 +477,10 @@ export function OrderClient({
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
             Search: "{search || "(empty)"}" • Filtered: {filteredProducts.length} • UPC missing:{" "}
             {upcStats.missing} • UPC length map: {upcStats.lengths || "n/a"}
+          </div>
+          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+            Session: {activeDebugSession || "(not set)"} | Remote stream:{" "}
+            {activeDebugSession ? "enabled" : "disabled (add ?debugSession=...)"}
           </div>
           <details>
             <summary style={{ cursor: "pointer", fontSize: 13 }}>

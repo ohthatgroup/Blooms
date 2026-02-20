@@ -17,6 +17,11 @@ export default async function CustomerOrderPage({
   const debugScanRaw = resolvedSearchParams.debugScan;
   const debugScanValue = Array.isArray(debugScanRaw) ? debugScanRaw[0] : debugScanRaw;
   const debugScan = debugScanValue === "1" || debugScanValue === "true";
+  const debugSessionRaw = resolvedSearchParams.debugSession;
+  const debugSessionValue = Array.isArray(debugSessionRaw)
+    ? debugSessionRaw[0]
+    : debugSessionRaw;
+  const debugSession = debugSessionValue?.trim() ?? "";
   const admin = createSupabaseAdminClient();
 
   const { data: link } = await admin
@@ -116,6 +121,7 @@ export default async function CustomerOrderPage({
       products={products}
       showUpc={link.show_upc !== false}
       debugScan={debugScan}
+      debugSession={debugSession}
       initialLiveOrder={
         liveOrder
           ? {

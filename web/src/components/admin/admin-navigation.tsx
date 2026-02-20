@@ -9,6 +9,7 @@ const navLinks = [
   { href: "/admin", label: "Catalogs" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/deals", label: "Deals" },
+  { href: "/admin/debug-scan", label: "Scanner Debug" },
 ];
 
 export function AdminNavigation() {
@@ -18,6 +19,7 @@ export function AdminNavigation() {
     if (href === "/admin") return pathname === "/admin" || pathname.startsWith("/admin/catalogs");
     if (href === "/admin/orders") return pathname.startsWith("/admin/orders");
     if (href === "/admin/deals") return pathname.startsWith("/admin/deals");
+    if (href === "/admin/debug-scan") return pathname.startsWith("/admin/debug-scan");
     return false;
   }
 
@@ -76,6 +78,19 @@ export function AdminNavigation() {
             <path d="M3 13l9 6 9-6" />
           </svg>
           <span>Deals</span>
+        </Link>
+        <Link
+          href="/admin/debug-scan"
+          className={`admin-nav-mobile__tab${isActive("/admin/debug-scan") ? " admin-nav-mobile__tab--active" : ""}`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <path d="M7 8h.01" />
+            <path d="M12 8h5" />
+            <path d="M7 12h10" />
+            <path d="M7 16h7" />
+          </svg>
+          <span>Debug</span>
         </Link>
       </nav>
     </>
