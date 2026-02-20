@@ -143,7 +143,12 @@ export function OrderClient({
     };
   }, [products]);
 
-  const activeDebugSession = useMemo(() => debugSession.trim(), [debugSession]);
+  const activeDebugSession = useMemo(() => {
+    const explicit = debugSession.trim();
+    if (explicit) return explicit;
+    if (!debugScan) return "";
+    return `token-${token.slice(0, 12)}`;
+  }, [debugScan, debugSession, token]);
 
   const postScanDebugRemote = useCallback(
     (source: string, message: string, details?: Record<string, unknown>) => {
@@ -163,9 +168,16 @@ export function OrderClient({
           page_url: pageUrl,
         }),
         keepalive: true,
-      }).catch(() => {
-        // Ignore remote ingest failures; local debug panel still records events.
-      });
+      })
+        .then((response) => {
+          if (!response.ok) {
+            console.warn("[scan-debug] remote ingest failed", response.status, source, message);
+          }
+        })
+        .catch(() => {
+          console.warn("[scan-debug] remote ingest request error", source, message);
+          // Ignore remote ingest failures; local debug panel still records events.
+        });
     },
     [activeDebugSession, debugScan, token],
   );

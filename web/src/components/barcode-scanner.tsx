@@ -31,6 +31,7 @@ export function BarcodeScanner({
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<unknown>(null);
   const decodeFailCountRef = useRef(0);
+  const stoppingRef = useRef(false);
   const [error, setError] = useState("");
 
   const emitDebug = useCallback(
@@ -41,6 +42,31 @@ export function BarcodeScanner({
       console.debug("[scanner]", event.type, event.message, event.details ?? {});
     },
     [debug, onDebugEvent],
+  );
+
+  const stopScannerSafely = useCallback(
+    async (scanner: {
+      stop?: () => Promise<void>;
+      clear?: () => Promise<void> | void;
+      getState?: () => number;
+    }) => {
+      if (stoppingRef.current) return;
+      stoppingRef.current = true;
+
+      try {
+        const state = scanner.getState?.();
+        const canStop = state === undefined || state === 2 || state === 3;
+        if (canStop && scanner.stop) {
+          await scanner.stop().catch(() => {});
+          emitDebug({ type: "stop", message: "Scanner stopped during cleanup" });
+        }
+      } finally {
+        if (scanner.clear) {
+          await Promise.resolve(scanner.clear()).catch(() => {});
+        }
+      }
+    },
+    [emitDebug],
   );
 
   useEffect(() => {
@@ -81,8 +107,9 @@ export function BarcodeScanner({
             },
           });
           onScan(decodedText);
-          void scanner.stop().catch(() => {});
-          onClose();
+          void stopScannerSafely(scanner).finally(() => {
+            onClose();
+          });
         };
 
         const onDecodeError = () => {
@@ -150,21 +177,14 @@ export function BarcodeScanner({
       mounted = false;
       const scanner = html5QrCodeRef.current as {
         stop?: () => Promise<void>;
-        clear?: () => Promise<void>;
+        clear?: () => Promise<void> | void;
+        getState?: () => number;
       } | null;
-      if (scanner?.stop) {
-        void scanner
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            emitDebug({ type: "stop", message: "Scanner stopped during cleanup" });
-            if (scanner.clear) {
-              void scanner.clear().catch(() => {});
-            }
-          });
+      if (scanner) {
+        void stopScannerSafely(scanner);
       }
     };
-  }, [debug, emitDebug, onClose, onScan]);
+  }, [debug, emitDebug, onClose, onScan, stopScannerSafely]);
 
   return (
     <div className="scannerOverlay" onClick={onClose}>
