@@ -82,6 +82,9 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const [addPrice, setAddPrice] = useState("");
   const [addingItem, setAddingItem] = useState(false);
 
+  // Sub-page tab
+  const [activeTab, setActiveTab] = useState<"products" | "deals">("products");
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -443,353 +446,371 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
         </div>
       )}
 
-      {/* Deals Section */}
-      <div className="table-container">
-        <div className="table-container__header" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <strong>Deals</strong>
-          <span className="badge badge--processing">
-            <span className="badge__dot" />
-            {deals.length}
-          </span>
+      {/* Sub-page Tabs */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", borderBottom: "2px solid var(--border)" }}>
+          <button
+            className={`catalogTab${activeTab === "products" ? " catalogTab--active" : ""}`}
+            onClick={() => setActiveTab("products")}
+          >
+            Products ({items.length})
+          </button>
+          <button
+            className={`catalogTab${activeTab === "deals" ? " catalogTab--active" : ""}`}
+            onClick={() => setActiveTab("deals")}
+          >
+            Deals ({deals.length})
+          </button>
         </div>
-        <div style={{ padding: 16 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
-            <div style={{ position: "relative", minWidth: 120 }}>
-              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>SKU</label>
-              <input
-                className="input"
-                value={newDealSku}
-                placeholder="SKU"
-                onChange={(e) => handleSkuInput(e.target.value)}
-                onFocus={() => { if (skuSuggestions.length) setShowSkuSuggestions(true); }}
-                onBlur={() => setTimeout(() => setShowSkuSuggestions(false), 150)}
-              />
-              {showSkuSuggestions && (
-                <div style={{
-                  position: "absolute", top: "100%", left: 0, right: 0,
-                  background: "var(--card)", border: "1px solid var(--border)",
-                  borderRadius: 8, zIndex: 10, maxHeight: 160, overflowY: "auto",
-                  boxShadow: "var(--shadow-md)",
-                }}>
-                  {skuSuggestions.map((sku) => (
-                    <div
-                      key={sku}
-                      style={{ padding: "6px 10px", cursor: "pointer", fontSize: 13 }}
-                      onMouseDown={() => { setNewDealSku(sku); setShowSkuSuggestions(false); }}
-                    >
-                      {sku}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Deal Text</label>
-              <input
-                className="input"
-                value={newDealText}
-                placeholder="e.g. Buy 10 get 3 free"
-                onChange={(e) => setNewDealText(e.target.value)}
-              />
-            </div>
-            <div style={{ minWidth: 140 }}>
-              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Start Date</label>
-              <input
-                className="input"
-                type="date"
-                value={newDealStart}
-                onChange={(e) => setNewDealStart(e.target.value)}
-              />
-            </div>
-            <div style={{ minWidth: 140 }}>
-              <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>End Date</label>
-              <input
-                className="input"
-                type="date"
-                value={newDealEnd}
-                onChange={(e) => setNewDealEnd(e.target.value)}
-              />
-            </div>
-            <button className="button" onClick={addDeal}>Add Deal</button>
-          </div>
+      </div>
 
-          {deals.length === 0 ? (
-            <div className="muted" style={{ textAlign: "center", padding: 16 }}>
-              No deals yet. Add one above.
-            </div>
-          ) : (
+      {/* === PRODUCTS TAB === */}
+      {activeTab === "products" && (
+        <>
+          {/* Items Table */}
+          <div className="table-container">
             <div className="table-container__body">
               <table className="table">
                 <thead>
                   <tr>
+                    <th>Image</th>
                     <th>SKU</th>
-                    <th>Deal Text</th>
-                    <th>Start Date</th>
-                    <th>End Date</th>
-                    <th>Actions</th>
+                    <th>Name</th>
+                    <th>UPC</th>
+                    <th>Pack</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Change</th>
+                    <th>Issues</th>
+                    <th>Approved</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {deals.map((deal) => (
-                    <tr key={deal.id}>
-                      <td style={{ fontWeight: 600 }}>{deal.sku}</td>
-                      <td>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td style={{ minWidth: 140 }}>
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            width={64}
+                            height={64}
+                            style={{ borderRadius: 6, objectFit: "cover" }}
+                          />
+                        ) : (
+                          <span className="badge badge--error">
+                            <span className="badge__dot" />
+                            Missing
+                          </span>
+                        )}
+                        <div style={{ marginTop: 8 }}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                void replaceImage(item, file);
+                              }
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{item.sku}</td>
+                      <td style={{ minWidth: 220 }}>
                         <input
                           className="input"
-                          value={deal.deal_text}
+                          value={item.name}
                           onChange={(e) =>
-                            setDeals((prev) =>
-                              prev.map((d) =>
-                                d.id === deal.id ? { ...d, deal_text: e.target.value } : d,
+                            setItems((prev) =>
+                              prev.map((x) =>
+                                x.id === item.id ? { ...x, name: e.target.value } : x,
                               ),
                             )
                           }
-                          onBlur={(e) => void updateDeal(deal.id, { deal_text: e.target.value })}
+                          onBlur={(e) => void updateItem(item.id, { name: e.target.value })}
                         />
                       </td>
                       <td>
                         <input
                           className="input"
-                          type="date"
-                          value={deal.starts_at}
+                          value={item.upc ?? ""}
                           onChange={(e) =>
-                            setDeals((prev) =>
-                              prev.map((d) =>
-                                d.id === deal.id ? { ...d, starts_at: e.target.value } : d,
+                            setItems((prev) =>
+                              prev.map((x) =>
+                                x.id === item.id ? { ...x, upc: e.target.value } : x,
                               ),
                             )
                           }
-                          onBlur={(e) => void updateDeal(deal.id, { starts_at: e.target.value })}
+                          onBlur={(e) => void updateItem(item.id, { upc: e.target.value || null })}
                         />
                       </td>
                       <td>
                         <input
                           className="input"
-                          type="date"
-                          value={deal.ends_at}
+                          value={item.pack ?? ""}
                           onChange={(e) =>
-                            setDeals((prev) =>
-                              prev.map((d) =>
-                                d.id === deal.id ? { ...d, ends_at: e.target.value } : d,
+                            setItems((prev) =>
+                              prev.map((x) =>
+                                x.id === item.id ? { ...x, pack: e.target.value } : x,
                               ),
                             )
                           }
-                          onBlur={(e) => void updateDeal(deal.id, { ends_at: e.target.value })}
+                          onBlur={(e) => void updateItem(item.id, { pack: e.target.value || null })}
                         />
                       </td>
                       <td>
-                        <button
-                          className="button secondary"
-                          style={{ borderColor: "var(--red)", color: "var(--red)", padding: "4px 10px", fontSize: 12 }}
-                          onClick={() => void deleteDeal(deal.id)}
-                        >
-                          Delete
-                        </button>
+                        <input
+                          className="input"
+                          value={item.category}
+                          onChange={(e) =>
+                            setItems((prev) =>
+                              prev.map((x) =>
+                                x.id === item.id ? { ...x, category: e.target.value } : x,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
+                        />
+                      </td>
+                      <td style={{ minWidth: 90 }}>
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.price ?? ""}
+                          placeholder="0.00"
+                          onChange={(e) =>
+                            setItems((prev) =>
+                              prev.map((x) =>
+                                x.id === item.id
+                                  ? { ...x, price: e.target.value ? parseFloat(e.target.value) : null }
+                                  : x,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => {
+                            const val = e.target.value ? parseFloat(e.target.value) : null;
+                            void updateItem(item.id, { price: val });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <span className={`badge badge--${item.change_type === "unchanged" ? "unchanged" : item.change_type === "updated" ? "updated" : "new"}`}>
+                          <span className="badge__dot" />
+                          {item.change_type ?? "new"}
+                        </span>
+                      </td>
+                      <td style={{ maxWidth: 180 }}>
+                        {(item.parse_issues ?? []).length ? (
+                          <span className="badge badge--error">
+                            <span className="badge__dot" />
+                            {item.parse_issues.join(", ")}
+                          </span>
+                        ) : (
+                          <span className="badge badge--success">
+                            <span className="badge__dot" />
+                            none
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={item.approved}
+                          onChange={(e) => void updateItem(item.id, { approved: e.target.checked })}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* Items Table */}
-      <div className="table-container">
-        <div className="table-container__body">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>SKU</th>
-                <th>Name</th>
-                <th>UPC</th>
-                <th>Pack</th>
-                <th>Category</th>
-                <th>Price</th>
-                <th>Change</th>
-                <th>Issues</th>
-                <th>Approved</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ minWidth: 140 }}>
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        width={64}
-                        height={64}
-                        style={{ borderRadius: 6, objectFit: "cover" }}
-                      />
-                    ) : (
-                      <span className="badge badge--error">
-                        <span className="badge__dot" />
-                        Missing
-                      </span>
-                    )}
-                    <div style={{ marginTop: 8 }}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            void replaceImage(item, file);
-                          }
-                        }}
-                      />
-                    </div>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{item.sku}</td>
-                  <td style={{ minWidth: 220 }}>
-                    <input
-                      className="input"
-                      value={item.name}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id ? { ...x, name: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => void updateItem(item.id, { name: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="input"
-                      value={item.upc ?? ""}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id ? { ...x, upc: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => void updateItem(item.id, { upc: e.target.value || null })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="input"
-                      value={item.pack ?? ""}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id ? { ...x, pack: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => void updateItem(item.id, { pack: e.target.value || null })}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="input"
-                      value={item.category}
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id ? { ...x, category: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => void updateItem(item.id, { category: e.target.value })}
-                    />
-                  </td>
-                  <td style={{ minWidth: 90 }}>
-                    <input
-                      className="input"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.price ?? ""}
-                      placeholder="0.00"
-                      onChange={(e) =>
-                        setItems((prev) =>
-                          prev.map((x) =>
-                            x.id === item.id
-                              ? { ...x, price: e.target.value ? parseFloat(e.target.value) : null }
-                              : x,
-                          ),
-                        )
-                      }
-                      onBlur={(e) => {
-                        const val = e.target.value ? parseFloat(e.target.value) : null;
-                        void updateItem(item.id, { price: val });
-                      }}
-                    />
-                  </td>
-                  <td>
-                    <span className={`badge badge--${item.change_type === "unchanged" ? "unchanged" : item.change_type === "updated" ? "updated" : "new"}`}>
-                      <span className="badge__dot" />
-                      {item.change_type ?? "new"}
-                    </span>
-                  </td>
-                  <td style={{ maxWidth: 180 }}>
-                    {(item.parse_issues ?? []).length ? (
-                      <span className="badge badge--error">
-                        <span className="badge__dot" />
-                        {item.parse_issues.join(", ")}
-                      </span>
-                    ) : (
-                      <span className="badge badge--success">
-                        <span className="badge__dot" />
-                        none
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={item.approved}
-                      onChange={(e) => void updateItem(item.id, { approved: e.target.checked })}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          {/* Add Item */}
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Add Item</h3>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div className="form-group" style={{ flex: "0 0 110px" }}>
+                <label className="form-label">SKU</label>
+                <input className="input" value={addSku} onChange={(e) => setAddSku(e.target.value)} placeholder="SKU" />
+              </div>
+              <div className="form-group" style={{ flex: "1 1 200px" }}>
+                <label className="form-label">Name</label>
+                <input className="input" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" />
+              </div>
+              <div className="form-group" style={{ flex: "0 0 130px" }}>
+                <label className="form-label">UPC</label>
+                <input className="input" value={addUpc} onChange={(e) => setAddUpc(e.target.value)} placeholder="UPC" />
+              </div>
+              <div className="form-group" style={{ flex: "0 0 110px" }}>
+                <label className="form-label">Pack</label>
+                <input className="input" value={addPack} onChange={(e) => setAddPack(e.target.value)} placeholder="Pack" />
+              </div>
+              <div className="form-group" style={{ flex: "0 0 140px" }}>
+                <label className="form-label">Category</label>
+                <input className="input" value={addCategory} onChange={(e) => setAddCategory(e.target.value)} placeholder="Category" />
+              </div>
+              <div className="form-group" style={{ flex: "0 0 90px" }}>
+                <label className="form-label">Price</label>
+                <input className="input" type="number" step="0.01" min="0" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="0.00" />
+              </div>
+              <button className="button" onClick={addItem} disabled={addingItem || !addSku.trim() || !addName.trim() || !addCategory.trim()}>
+                {addingItem ? "Adding..." : "Add"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* Add Item */}
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Add Item</h3>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div className="form-group" style={{ flex: "0 0 110px" }}>
-            <label className="form-label">SKU</label>
-            <input className="input" value={addSku} onChange={(e) => setAddSku(e.target.value)} placeholder="SKU" />
+      {/* === DEALS TAB === */}
+      {activeTab === "deals" && (
+        <div className="table-container">
+          <div style={{ padding: 16 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+              <div style={{ position: "relative", minWidth: 120 }}>
+                <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>SKU</label>
+                <input
+                  className="input"
+                  value={newDealSku}
+                  placeholder="SKU"
+                  onChange={(e) => handleSkuInput(e.target.value)}
+                  onFocus={() => { if (skuSuggestions.length) setShowSkuSuggestions(true); }}
+                  onBlur={() => setTimeout(() => setShowSkuSuggestions(false), 150)}
+                />
+                {showSkuSuggestions && (
+                  <div style={{
+                    position: "absolute", top: "100%", left: 0, right: 0,
+                    background: "var(--card)", border: "1px solid var(--border)",
+                    borderRadius: 8, zIndex: 10, maxHeight: 160, overflowY: "auto",
+                    boxShadow: "var(--shadow-md)",
+                  }}>
+                    {skuSuggestions.map((sku) => (
+                      <div
+                        key={sku}
+                        style={{ padding: "6px 10px", cursor: "pointer", fontSize: 13 }}
+                        onMouseDown={() => { setNewDealSku(sku); setShowSkuSuggestions(false); }}
+                      >
+                        {sku}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Deal Text</label>
+                <input
+                  className="input"
+                  value={newDealText}
+                  placeholder="e.g. Buy 10 get 3 free"
+                  onChange={(e) => setNewDealText(e.target.value)}
+                />
+              </div>
+              <div style={{ minWidth: 140 }}>
+                <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>Start Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={newDealStart}
+                  onChange={(e) => setNewDealStart(e.target.value)}
+                />
+              </div>
+              <div style={{ minWidth: 140 }}>
+                <label style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 2 }}>End Date</label>
+                <input
+                  className="input"
+                  type="date"
+                  value={newDealEnd}
+                  onChange={(e) => setNewDealEnd(e.target.value)}
+                />
+              </div>
+              <button className="button" onClick={addDeal}>Add Deal</button>
+            </div>
+
+            {deals.length === 0 ? (
+              <div className="muted" style={{ textAlign: "center", padding: 16 }}>
+                No deals yet. Add one above.
+              </div>
+            ) : (
+              <div className="table-container__body">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>Deal Text</th>
+                      <th>Start Date</th>
+                      <th>End Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deals.map((deal) => (
+                      <tr key={deal.id}>
+                        <td style={{ fontWeight: 600 }}>{deal.sku}</td>
+                        <td>
+                          <input
+                            className="input"
+                            value={deal.deal_text}
+                            onChange={(e) =>
+                              setDeals((prev) =>
+                                prev.map((d) =>
+                                  d.id === deal.id ? { ...d, deal_text: e.target.value } : d,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => void updateDeal(deal.id, { deal_text: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="input"
+                            type="date"
+                            value={deal.starts_at}
+                            onChange={(e) =>
+                              setDeals((prev) =>
+                                prev.map((d) =>
+                                  d.id === deal.id ? { ...d, starts_at: e.target.value } : d,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => void updateDeal(deal.id, { starts_at: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="input"
+                            type="date"
+                            value={deal.ends_at}
+                            onChange={(e) =>
+                              setDeals((prev) =>
+                                prev.map((d) =>
+                                  d.id === deal.id ? { ...d, ends_at: e.target.value } : d,
+                                ),
+                              )
+                            }
+                            onBlur={(e) => void updateDeal(deal.id, { ends_at: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            className="button secondary"
+                            style={{ borderColor: "var(--red)", color: "var(--red)", padding: "4px 10px", fontSize: 12 }}
+                            onClick={() => void deleteDeal(deal.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div className="form-group" style={{ flex: "1 1 200px" }}>
-            <label className="form-label">Name</label>
-            <input className="input" value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Product name" />
-          </div>
-          <div className="form-group" style={{ flex: "0 0 130px" }}>
-            <label className="form-label">UPC</label>
-            <input className="input" value={addUpc} onChange={(e) => setAddUpc(e.target.value)} placeholder="UPC" />
-          </div>
-          <div className="form-group" style={{ flex: "0 0 110px" }}>
-            <label className="form-label">Pack</label>
-            <input className="input" value={addPack} onChange={(e) => setAddPack(e.target.value)} placeholder="Pack" />
-          </div>
-          <div className="form-group" style={{ flex: "0 0 140px" }}>
-            <label className="form-label">Category</label>
-            <input className="input" value={addCategory} onChange={(e) => setAddCategory(e.target.value)} placeholder="Category" />
-          </div>
-          <div className="form-group" style={{ flex: "0 0 90px" }}>
-            <label className="form-label">Price</label>
-            <input className="input" type="number" step="0.01" min="0" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="0.00" />
-          </div>
-          <button className="button" onClick={addItem} disabled={addingItem || !addSku.trim() || !addName.trim() || !addCategory.trim()}>
-            {addingItem ? "Adding..." : "Add"}
-          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

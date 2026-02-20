@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   const payload = await request.json().catch(() => null);
   const parsed = importCatalogSchema.safeParse(payload);
   if (!parsed.success) {
+    console.error("[catalog-import] Validation failed", parsed.error.flatten());
     return NextResponse.json(
       { error: "Invalid input", details: parsed.error.flatten() },
       { status: 400 },
@@ -25,21 +26,39 @@ export async function POST(request: Request) {
   let catalogId = parsed.data.catalog_id ?? "";
   let isUpdate = false;
 
+  console.log("[catalog-import] Starting", {
+    mode: catalogId ? "update" : "new",
+    catalogId: catalogId || "(new)",
+    itemCount: uniqueItems.length,
+    versionLabel: parsed.data.version_label,
+  });
+
   if (catalogId) {
     // Importing into existing catalog – verify it exists and isn't deleted
-    const { data: existing } = await auth.admin
+    const { data: existing, error: lookupError } = await auth.admin
       .from("catalogs")
       .select("id,status")
       .eq("id", catalogId)
       .is("deleted_at", null)
       .single();
 
-    if (!existing) {
+    if (lookupError || !existing) {
+      console.error("[catalog-import] Catalog lookup failed", {
+        catalogId,
+        error: lookupError?.message,
+        code: lookupError?.code,
+        hint: lookupError?.hint,
+      });
       return NextResponse.json(
-        { error: "Catalog not found" },
+        {
+          error: "Catalog not found",
+          details: lookupError?.message ?? "No matching catalog with that ID (or it was deleted)",
+          catalog_id: catalogId,
+        },
         { status: 404 },
       );
     }
+    console.log("[catalog-import] Found catalog", { id: existing.id, status: existing.status });
     isUpdate = true;
   } else {
     // Create new catalog row (no PDF, no parsing needed)
@@ -60,12 +79,14 @@ export async function POST(request: Request) {
       .single();
 
     if (catalogError || !catalog) {
+      console.error("[catalog-import] Failed to create catalog", catalogError);
       return NextResponse.json(
         { error: "Failed to create catalog", details: catalogError?.message },
         { status: 500 },
       );
     }
     catalogId = catalog.id;
+    console.log("[catalog-import] Created new catalog", { catalogId });
   }
 
   const now = new Date().toISOString();
@@ -81,11 +102,18 @@ export async function POST(request: Request) {
     const SKU_BATCH = 200;
     for (let i = 0; i < incomingSkus.length; i += SKU_BATCH) {
       const skuBatch = incomingSkus.slice(i, i + SKU_BATCH);
-      const { data: existingItems } = await auth.admin
+      const { data: existingItems, error: fetchError } = await auth.admin
         .from("catalog_items")
         .select("id,sku,image_storage_path")
         .eq("catalog_id", catalogId)
         .in("sku", skuBatch);
+
+      if (fetchError) {
+        console.error("[catalog-import] Failed to fetch existing SKUs", {
+          batch: Math.floor(i / SKU_BATCH) + 1,
+          error: fetchError.message,
+        });
+      }
 
       for (const item of existingItems ?? []) {
         existingBySku.set(item.sku.toUpperCase(), {
@@ -94,6 +122,11 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    console.log("[catalog-import] Update mode", {
+      existingMatchedSkus: existingBySku.size,
+      incomingSkus: incomingSkus.length,
+    });
 
     // Get max display_order for new items
     const { data: maxRow } = await auth.admin
@@ -124,6 +157,11 @@ export async function POST(request: Request) {
           .eq("id", existing.id);
 
         if (updateError) {
+          console.error("[catalog-import] Failed to update SKU", {
+            sku: item.sku,
+            itemId: existing.id,
+            error: updateError.message,
+          });
           return NextResponse.json(
             { error: `Failed to update SKU "${item.sku}"`, details: updateError.message },
             { status: 500 },
@@ -153,11 +191,19 @@ export async function POST(request: Request) {
     const BATCH_SIZE = 500;
     for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
       const batch = toInsert.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      console.log("[catalog-import] Inserting batch", { batch: batchNum, items: batch.length });
+
       const { error: insertError } = await auth.admin
         .from("catalog_items")
         .insert(batch);
 
       if (insertError) {
+        console.error("[catalog-import] Batch insert failed", {
+          batch: batchNum,
+          error: insertError.message,
+          code: insertError.code,
+        });
         return NextResponse.json(
           { error: "Failed to insert new catalog items", details: insertError.message },
           { status: 500 },
@@ -195,6 +241,12 @@ export async function POST(request: Request) {
       }
     }
 
+    console.log("[catalog-import] Image carry-over", {
+      fromCatalog: publishedCatalog?.id ?? "(none)",
+      imagesFound: imageBySku.size,
+      totalItems: uniqueItems.length,
+    });
+
     const catalogItems = uniqueItems.map((item, index) => ({
       catalog_id: catalogId,
       sku: item.sku,
@@ -213,11 +265,20 @@ export async function POST(request: Request) {
     const BATCH_SIZE = 500;
     for (let i = 0; i < catalogItems.length; i += BATCH_SIZE) {
       const batch = catalogItems.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      console.log("[catalog-import] Inserting batch", { batch: batchNum, items: batch.length });
+
       const { error: insertError } = await auth.admin
         .from("catalog_items")
         .insert(batch);
 
       if (insertError) {
+        console.error("[catalog-import] Batch insert failed, cleaning up", {
+          batch: batchNum,
+          error: insertError.message,
+          code: insertError.code,
+          catalogId,
+        });
         // Clean up: delete the half-created catalog so we don't leave orphans
         await auth.admin.from("catalog_items").delete().eq("catalog_id", catalogId);
         await auth.admin.from("catalogs").delete().eq("id", catalogId);
@@ -229,6 +290,14 @@ export async function POST(request: Request) {
     }
     insertedCount = uniqueItems.length;
   }
+
+  console.log("[catalog-import] Done", {
+    catalogId,
+    isUpdate,
+    insertedCount,
+    updatedCount,
+    totalItems: uniqueItems.length,
+  });
 
   return NextResponse.json(
     {
