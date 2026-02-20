@@ -1,16 +1,47 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+export interface BarcodeScannerDebugEvent {
+  type:
+    | "init"
+    | "start"
+    | "start-fallback"
+    | "decode"
+    | "decode-progress"
+    | "stop"
+    | "error";
+  message: string;
+  details?: Record<string, unknown>;
+}
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   onClose: () => void;
+  debug?: boolean;
+  onDebugEvent?: (event: BarcodeScannerDebugEvent) => void;
 }
 
-export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
+export function BarcodeScanner({
+  onScan,
+  onClose,
+  debug = false,
+  onDebugEvent,
+}: BarcodeScannerProps) {
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<unknown>(null);
+  const decodeFailCountRef = useRef(0);
   const [error, setError] = useState("");
+
+  const emitDebug = useCallback(
+    (event: BarcodeScannerDebugEvent) => {
+      if (!debug) return;
+      onDebugEvent?.(event);
+      // Keep console logging local to explicit debug mode.
+      console.debug("[scanner]", event.type, event.message, event.details ?? {});
+    },
+    [debug, onDebugEvent],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -20,6 +51,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
 
         if (!mounted || !scannerRef.current) return;
+        emitDebug({ type: "init", message: "Scanner module loaded" });
 
         const scanner = new Html5Qrcode("barcode-scanner-region", {
           formatsToSupport: [
@@ -34,26 +66,80 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         });
         html5QrCodeRef.current = scanner;
 
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 280, height: 150 },
-          },
-          (decodedText: string) => {
-            onScan(decodedText);
-            void scanner.stop().catch(() => {});
-            onClose();
-          },
-          () => {
-            // scan failure - ignore, keep trying
-          },
-        );
+        const config = {
+          fps: 10,
+          qrbox: { width: 280, height: 150 },
+        };
+
+        const onDecode = (decodedText: string) => {
+          emitDebug({
+            type: "decode",
+            message: "Decode success",
+            details: {
+              raw: decodedText,
+              length: decodedText.length,
+            },
+          });
+          onScan(decodedText);
+          void scanner.stop().catch(() => {});
+          onClose();
+        };
+
+        const onDecodeError = () => {
+          decodeFailCountRef.current += 1;
+          if (debug && decodeFailCountRef.current % 25 === 0) {
+            emitDebug({
+              type: "decode-progress",
+              message: `Still scanning (${decodeFailCountRef.current} decode misses)`,
+            });
+          }
+        };
+
+        try {
+          await scanner.start({ facingMode: "environment" }, config, onDecode, onDecodeError);
+          emitDebug({
+            type: "start",
+            message: "Scanner started with environment-facing camera",
+          });
+        } catch (primaryErr) {
+          emitDebug({
+            type: "start-fallback",
+            message: "Environment camera start failed; trying available camera list",
+            details: {
+              error:
+                primaryErr instanceof Error ? primaryErr.message : "unknown primary start error",
+            },
+          });
+
+          const cameras = await Html5Qrcode.getCameras();
+          if (!cameras.length) {
+            throw primaryErr;
+          }
+          const preferredCamera = cameras.find((camera: { label: string }) =>
+            /(back|rear|environment)/i.test(camera.label),
+          );
+          const selectedCamera = preferredCamera ?? cameras[0];
+          await scanner.start(selectedCamera.id, config, onDecode, onDecodeError);
+          emitDebug({
+            type: "start",
+            message: "Scanner started with fallback camera",
+            details: {
+              cameraLabel: selectedCamera.label,
+              cameraId: selectedCamera.id,
+              cameraCount: cameras.length,
+            },
+          });
+        }
       } catch (err: unknown) {
         if (mounted) {
           const message =
             err instanceof Error ? err.message : "Camera access failed";
           setError(message);
+          emitDebug({
+            type: "error",
+            message: "Scanner failed to start",
+            details: { error: message },
+          });
         }
       }
     }
@@ -62,12 +148,23 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
     return () => {
       mounted = false;
-      const scanner = html5QrCodeRef.current as { stop?: () => Promise<void> } | null;
+      const scanner = html5QrCodeRef.current as {
+        stop?: () => Promise<void>;
+        clear?: () => Promise<void>;
+      } | null;
       if (scanner?.stop) {
-        void scanner.stop().catch(() => {});
+        void scanner
+          .stop()
+          .catch(() => {})
+          .finally(() => {
+            emitDebug({ type: "stop", message: "Scanner stopped during cleanup" });
+            if (scanner.clear) {
+              void scanner.clear().catch(() => {});
+            }
+          });
       }
     };
-  }, [onClose, onScan]);
+  }, [debug, emitDebug, onClose, onScan]);
 
   return (
     <div className="scannerOverlay" onClick={onClose}>
