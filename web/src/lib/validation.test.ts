@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createDealSchema,
-  ingestScanDebugEventSchema,
   patchCustomerLinkSchema,
   saveOrderDraftSchema,
 } from "@/lib/validation";
@@ -90,30 +89,6 @@ describe("createDealSchema", () => {
       buy_qty: 10,
       starts_at: "2026-02-01",
       ends_at: "2026-02-27",
-    });
-    expect(parsed.success).toBe(false);
-  });
-});
-
-describe("ingestScanDebugEventSchema", () => {
-  it("accepts a valid payload", () => {
-    const parsed = ingestScanDebugEventSchema.safeParse({
-      token: "1234567890_token",
-      session_id: "scan-session-1",
-      source: "scanner:start",
-      message: "Scanner started",
-      details: { camera: "rear" },
-      page_url: "https://blooms-mu.vercel.app/o/token?debugScan=true",
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("rejects invalid session characters", () => {
-    const parsed = ingestScanDebugEventSchema.safeParse({
-      token: "1234567890_token",
-      session_id: "bad session with spaces",
-      source: "scanner:error",
-      message: "bad session id",
     });
     expect(parsed.success).toBe(false);
   });

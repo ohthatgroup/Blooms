@@ -162,22 +162,6 @@ export const saveOrderDraftSchema = z.object({
     .default([]),
 });
 
-const scanDebugSessionSchema = z
-  .string()
-  .min(3)
-  .max(120)
-  .regex(/^[a-zA-Z0-9._:-]+$/);
-
-export const ingestScanDebugEventSchema = z.object({
-  token: z.string().min(10),
-  session_id: scanDebugSessionSchema,
-  source: z.string().min(1).max(80),
-  event_type: z.string().min(1).max(80).optional(),
-  message: z.string().min(1).max(500),
-  details: z.record(z.string(), z.unknown()).optional(),
-  page_url: z.string().url().max(1200).optional(),
-});
-
 export const patchOrderSchema = z.object({
   customer_name: z.string().min(1).max(200),
   items: z

@@ -2,47 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export interface BarcodeScannerDebugEvent {
-  type:
-    | "init"
-    | "start"
-    | "start-fallback"
-    | "decode"
-    | "decode-progress"
-    | "stop"
-    | "error";
-  message: string;
-  details?: Record<string, unknown>;
-}
-
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
   onClose: () => void;
-  debug?: boolean;
-  onDebugEvent?: (event: BarcodeScannerDebugEvent) => void;
 }
 
 export function BarcodeScanner({
   onScan,
   onClose,
-  debug = false,
-  onDebugEvent,
 }: BarcodeScannerProps) {
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<unknown>(null);
-  const decodeFailCountRef = useRef(0);
   const stoppingRef = useRef(false);
   const [error, setError] = useState("");
-
-  const emitDebug = useCallback(
-    (event: BarcodeScannerDebugEvent) => {
-      if (!debug) return;
-      onDebugEvent?.(event);
-      // Keep console logging local to explicit debug mode.
-      console.debug("[scanner]", event.type, event.message, event.details ?? {});
-    },
-    [debug, onDebugEvent],
-  );
 
   const stopScannerSafely = useCallback(
     async (scanner: {
@@ -58,7 +30,6 @@ export function BarcodeScanner({
         const canStop = state === undefined || state === 2 || state === 3;
         if (canStop && scanner.stop) {
           await scanner.stop().catch(() => {});
-          emitDebug({ type: "stop", message: "Scanner stopped during cleanup" });
         }
       } finally {
         if (scanner.clear) {
@@ -66,7 +37,7 @@ export function BarcodeScanner({
         }
       }
     },
-    [emitDebug],
+    [],
   );
 
   useEffect(() => {
@@ -77,7 +48,6 @@ export function BarcodeScanner({
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
 
         if (!mounted || !scannerRef.current) return;
-        emitDebug({ type: "init", message: "Scanner module loaded" });
 
         const scanner = new Html5Qrcode("barcode-scanner-region", {
           formatsToSupport: [
@@ -98,46 +68,17 @@ export function BarcodeScanner({
         };
 
         const onDecode = (decodedText: string) => {
-          emitDebug({
-            type: "decode",
-            message: "Decode success",
-            details: {
-              raw: decodedText,
-              length: decodedText.length,
-            },
-          });
           onScan(decodedText);
           void stopScannerSafely(scanner).finally(() => {
             onClose();
           });
         };
 
-        const onDecodeError = () => {
-          decodeFailCountRef.current += 1;
-          if (debug && decodeFailCountRef.current % 25 === 0) {
-            emitDebug({
-              type: "decode-progress",
-              message: `Still scanning (${decodeFailCountRef.current} decode misses)`,
-            });
-          }
-        };
+        const onDecodeError = () => {};
 
         try {
           await scanner.start({ facingMode: "environment" }, config, onDecode, onDecodeError);
-          emitDebug({
-            type: "start",
-            message: "Scanner started with environment-facing camera",
-          });
         } catch (primaryErr) {
-          emitDebug({
-            type: "start-fallback",
-            message: "Environment camera start failed; trying available camera list",
-            details: {
-              error:
-                primaryErr instanceof Error ? primaryErr.message : "unknown primary start error",
-            },
-          });
-
           const cameras = await Html5Qrcode.getCameras();
           if (!cameras.length) {
             throw primaryErr;
@@ -147,26 +88,12 @@ export function BarcodeScanner({
           );
           const selectedCamera = preferredCamera ?? cameras[0];
           await scanner.start(selectedCamera.id, config, onDecode, onDecodeError);
-          emitDebug({
-            type: "start",
-            message: "Scanner started with fallback camera",
-            details: {
-              cameraLabel: selectedCamera.label,
-              cameraId: selectedCamera.id,
-              cameraCount: cameras.length,
-            },
-          });
         }
       } catch (err: unknown) {
         if (mounted) {
           const message =
             err instanceof Error ? err.message : "Camera access failed";
           setError(message);
-          emitDebug({
-            type: "error",
-            message: "Scanner failed to start",
-            details: { error: message },
-          });
         }
       }
     }
@@ -184,7 +111,7 @@ export function BarcodeScanner({
         void stopScannerSafely(scanner);
       }
     };
-  }, [debug, emitDebug, onClose, onScan, stopScannerSafely]);
+  }, [onClose, onScan, stopScannerSafely]);
 
   return (
     <div className="scannerOverlay" onClick={onClose}>

@@ -7,21 +7,10 @@ import { formatDealText } from "@/lib/deals/matrix";
 
 export default async function CustomerOrderPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
-  const resolvedSearchParams = await searchParams;
-  const debugScanRaw = resolvedSearchParams.debugScan;
-  const debugScanValue = Array.isArray(debugScanRaw) ? debugScanRaw[0] : debugScanRaw;
-  const debugScan = debugScanValue === "1" || debugScanValue === "true";
-  const debugSessionRaw = resolvedSearchParams.debugSession;
-  const debugSessionValue = Array.isArray(debugSessionRaw)
-    ? debugSessionRaw[0]
-    : debugSessionRaw;
-  const debugSession = debugSessionValue?.trim() ?? "";
   const admin = createSupabaseAdminClient();
 
   const { data: link } = await admin
@@ -120,8 +109,6 @@ export default async function CustomerOrderPage({
       catalogLabel={catalog.version_label}
       products={products}
       showUpc={link.show_upc !== false}
-      debugScan={debugScan}
-      debugSession={debugSession}
       initialLiveOrder={
         liveOrder
           ? {

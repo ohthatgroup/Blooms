@@ -3,7 +3,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import type { ProductForOrder } from "@/lib/types";
-import type { BarcodeScannerDebugEvent } from "@/components/barcode-scanner";
 import {
   buildDealTiers,
   getNextTierProgress,
@@ -22,8 +21,6 @@ interface OrderClientProps {
   catalogLabel: string;
   products: ProductForOrder[];
   showUpc?: boolean;
-  debugScan?: boolean;
-  debugSession?: string;
   initialLiveOrder: {
     id: string;
     customer_name: string;
@@ -37,8 +34,6 @@ export function OrderClient({
   catalogLabel,
   products,
   showUpc = true,
-  debugScan = false,
-  debugSession = "",
   initialLiveOrder,
 }: OrderClientProps) {
   const [search, setSearch] = useState("");
@@ -81,14 +76,6 @@ export function OrderClient({
   });
   const [dealPopupSku, setDealPopupSku] = useState<string | null>(null);
   const [showScanner, setShowScanner] = useState(false);
-  const [scanDebugEvents, setScanDebugEvents] = useState<
-    Array<{
-      time: string;
-      source: string;
-      message: string;
-      details?: Record<string, unknown>;
-    }>
-  >([]);
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -122,79 +109,6 @@ export function OrderClient({
     }
     return result;
   }, [activeTab, products, search]);
-
-  const upcStats = useMemo(() => {
-    let missing = 0;
-    const lengths = new Map<number, number>();
-    for (const product of products) {
-      const digits = product.upc.replace(/\D/g, "");
-      if (!digits) {
-        missing += 1;
-        continue;
-      }
-      lengths.set(digits.length, (lengths.get(digits.length) ?? 0) + 1);
-    }
-    return {
-      missing,
-      lengths: Array.from(lengths.entries())
-        .sort((a, b) => a[0] - b[0])
-        .map(([length, count]) => `${length}:${count}`)
-        .join(", "),
-    };
-  }, [products]);
-
-  const activeDebugSession = useMemo(() => {
-    const explicit = debugSession.trim();
-    if (explicit) return explicit;
-    if (!debugScan) return "";
-    return `token-${token.slice(0, 12)}`;
-  }, [debugScan, debugSession, token]);
-
-  const postScanDebugRemote = useCallback(
-    (source: string, message: string, details?: Record<string, unknown>) => {
-      if (!debugScan || !activeDebugSession) return;
-      const pageUrl =
-        typeof window === "undefined" ? undefined : window.location.href;
-      void fetch("/api/public/debug/scan", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          token,
-          session_id: activeDebugSession,
-          source,
-          event_type: source,
-          message,
-          details,
-          page_url: pageUrl,
-        }),
-        keepalive: true,
-      })
-        .then((response) => {
-          if (!response.ok) {
-            console.warn("[scan-debug] remote ingest failed", response.status, source, message);
-          }
-        })
-        .catch(() => {
-          console.warn("[scan-debug] remote ingest request error", source, message);
-          // Ignore remote ingest failures; local debug panel still records events.
-        });
-    },
-    [activeDebugSession, debugScan, token],
-  );
-
-  const pushScanDebug = useCallback(
-    (source: string, message: string, details?: Record<string, unknown>) => {
-      if (!debugScan) return;
-      const time = new Date().toLocaleTimeString();
-      setScanDebugEvents((prev) => {
-        const next = [...prev, { time, source, message, details }];
-        return next.slice(-20);
-      });
-      console.debug("[scan-debug]", source, message, details ?? {});
-      postScanDebugRemote(source, message, details);
-    },
-    [debugScan, postScanDebugRemote],
-  );
 
   const orderItems = useMemo(() => {
     return Object.entries(quantities)
@@ -361,14 +275,6 @@ export function OrderClient({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zoomed]);
 
-  useEffect(() => {
-    if (!debugScan) return;
-    pushScanDebug("order-client", "Debug mode enabled", {
-      session: activeDebugSession || null,
-      remoteStreamEnabled: Boolean(activeDebugSession),
-    });
-  }, [activeDebugSession, debugScan, pushScanDebug]);
-
   // Debounced autosave (skip initial hydration).
   useEffect(() => {
     if (lastSavedSigRef.current === null) {
@@ -410,40 +316,19 @@ export function OrderClient({
   const handleScannerScan = useCallback(
     (code: string) => {
       const searchValue = pickSearchValueFromScan(code);
-      const matches = products.filter((product) =>
-        matchesBarcodeQuery(product.upc, searchValue),
-      );
-      pushScanDebug("order-client", "Scan decoded", {
-        rawCode: code,
-        appliedSearch: searchValue,
-        matchCount: matches.length,
-        firstMatches: matches.slice(0, 5).map((product) => ({
-          sku: product.sku,
-          upc: product.upc,
-        })),
-      });
       setSearch(searchValue);
       setShowScanner(false);
     },
-    [products, pushScanDebug],
+    [],
   );
 
   const handleScannerOpen = useCallback(() => {
     setShowScanner(true);
-    pushScanDebug("order-client", "Scanner opened");
-  }, [pushScanDebug]);
+  }, []);
 
   const handleScannerClose = useCallback(() => {
     setShowScanner(false);
-    pushScanDebug("order-client", "Scanner closed by user");
-  }, [pushScanDebug]);
-
-  const handleScannerDebugEvent = useCallback(
-    (event: BarcodeScannerDebugEvent) => {
-      pushScanDebug(`scanner:${event.type}`, event.message, event.details);
-    },
-    [pushScanDebug],
-  );
+  }, []);
 
   return (
     <div className="container" style={{ paddingBottom: 90 }}>
@@ -483,52 +368,11 @@ export function OrderClient({
         </div>
       </div>
 
-      {debugScan && (
-        <div className="card" style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Scanner Debug Mode</div>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-            Search: "{search || "(empty)"}" • Filtered: {filteredProducts.length} • UPC missing:{" "}
-            {upcStats.missing} • UPC length map: {upcStats.lengths || "n/a"}
-          </div>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-            Session: {activeDebugSession || "(not set)"} | Remote stream:{" "}
-            {activeDebugSession ? "enabled" : "disabled (add ?debugSession=...)"}
-          </div>
-          <details>
-            <summary style={{ cursor: "pointer", fontSize: 13 }}>
-              Recent scanner events ({scanDebugEvents.length})
-            </summary>
-            <pre
-              style={{
-                marginTop: 8,
-                maxHeight: 180,
-                overflow: "auto",
-                background: "rgba(0,0,0,0.04)",
-                padding: 8,
-                borderRadius: 6,
-                fontSize: 11,
-              }}
-            >
-              {scanDebugEvents
-                .map(
-                  (entry) =>
-                    `[${entry.time}] ${entry.source}: ${entry.message}${
-                      entry.details ? ` ${JSON.stringify(entry.details)}` : ""
-                    }`,
-                )
-                .join("\n")}
-            </pre>
-          </details>
-        </div>
-      )}
-
       {showScanner && (
         <Suspense fallback={<div className="muted" style={{ textAlign: "center", padding: 20 }}>Loading scanner...</div>}>
           <BarcodeScanner
             onScan={handleScannerScan}
             onClose={handleScannerClose}
-            debug={debugScan}
-            onDebugEvent={handleScannerDebugEvent}
           />
         </Suspense>
       )}
@@ -801,3 +645,4 @@ export function OrderClient({
     </div>
   );
 }
+
