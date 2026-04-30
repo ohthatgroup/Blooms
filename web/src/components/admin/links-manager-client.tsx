@@ -48,6 +48,33 @@ export function LinksManagerClient({
     Object.fromEntries(initialLinks.map((link) => [link.id, link.catalog_id])),
   );
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const formatDateTime = (value: string | null | undefined) => {
+    if (!value) return "-";
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(value));
+  };
+
+  const shortUrl = (value: string) => {
+    if (!value) return "";
+    try {
+      const url = new URL(value);
+      return `${url.host}${url.pathname}`;
+    } catch {
+      return value;
+    }
+  };
+
+  const orderSummary = (link: LinkRow) =>
+    link.has_order
+      ? `${link.total_skus ?? 0} SKUs / ${link.total_cases ?? 0} cases`
+      : "No order yet";
 
   async function copyToClipboard(text: string) {
     if (!text) return;
@@ -186,6 +213,166 @@ export function LinksManagerClient({
     await loadLinks();
   }
 
+  const renderStatus = (link: LinkRow) => (
+    <div className="orders-status">
+      <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
+        <span className="badge__dot" />
+        {link.active ? "Active" : "Disabled"}
+      </span>
+      <span className={`badge badge--${link.has_order ? "processing" : "draft"}`}>
+        <span className="badge__dot" />
+        {link.has_order ? "Order started" : "No order yet"}
+      </span>
+    </div>
+  );
+
+  const renderLink = (link: LinkRow) =>
+    link.url ? (
+      <div className="orders-link">
+        <a href={link.url} target="_blank" rel="noreferrer" title={link.url}>
+          {shortUrl(link.url)}
+        </a>
+        <button
+          type="button"
+          className="button secondary orders-link__copy"
+          onClick={() => void copyToClipboard(link.url)}
+        >
+          Copy
+        </button>
+      </div>
+    ) : (
+      <span className="muted">Set APP_BASE_URL</span>
+    );
+
+  const renderOrder = (link: LinkRow) => (
+    <div className="orders-order">
+      <span className={link.has_order ? undefined : "muted"}>{orderSummary(link)}</span>
+      {link.order_id ? (
+        <Link className="orders-order__edit" href={`/admin/orders/${link.order_id}`}>
+          Edit
+        </Link>
+      ) : null}
+    </div>
+  );
+
+  const renderRowMenu = (link: LinkRow) => {
+    const menuOpen = openMenuId === link.id;
+    const selectedCatalogId = catalogDraftByLinkId[link.id] ?? link.catalog_id;
+
+    return (
+      <div className="orders-menu">
+        <button
+          type="button"
+          className="button secondary orders-menu__trigger"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setOpenMenuId(menuOpen ? null : link.id)}
+        >
+          Settings
+        </button>
+        {menuOpen ? (
+          <div className="orders-menu__panel" role="menu">
+            <div className="orders-menu__group">
+              <label className="form-label" htmlFor={`catalog-${link.id}`}>
+                Catalog
+              </label>
+              <div className="orders-menu__catalog-row">
+                <select
+                  id={`catalog-${link.id}`}
+                  className="input"
+                  value={selectedCatalogId}
+                  onChange={(e) =>
+                    setCatalogDraftByLinkId((prev) => ({
+                      ...prev,
+                      [link.id]: e.target.value,
+                    }))
+                  }
+                >
+                  {catalogOptionForLink(link).map((catalog) => (
+                    <option key={catalog.id} value={catalog.id}>
+                      {catalog.version_label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => void updateLinkCatalog(link.id)}
+                  disabled={selectedCatalogId === link.catalog_id}
+                >
+                  Update
+                </button>
+              </div>
+            </div>
+
+            <div className="orders-menu__group orders-menu__toggles">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={link.show_upc !== false}
+                  onChange={() =>
+                    void toggleVisibility(link.id, "show_upc", link.show_upc !== false)
+                  }
+                />
+                Show UPC
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={link.show_price === true}
+                  onChange={() =>
+                    void toggleVisibility(link.id, "show_price", link.show_price === true)
+                  }
+                />
+                Show price
+              </label>
+            </div>
+
+            <div className="orders-menu__group orders-menu__actions">
+              {link.order_id ? (
+                <>
+                  <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
+                    Edit order
+                  </Link>
+                  {link.has_order ? (
+                    <a
+                      className="button secondary"
+                      href={`/api/admin/orders/${link.order_id}/csv`}
+                      download
+                    >
+                      Download CSV
+                    </a>
+                  ) : null}
+                  <OrderDeleteButton
+                    orderId={link.order_id}
+                    onDeleted={() => {
+                      setOpenMenuId(null);
+                      void loadLinks();
+                    }}
+                  />
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => void toggleLink(link.id, link.active)}
+              >
+                {link.active ? "Disable link" : "Enable link"}
+              </button>
+              <button
+                type="button"
+                className="button secondary orders-menu__danger"
+                onClick={() => void deleteLink(link.id)}
+              >
+                Delete link
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="grid">
       {/* Create Link Form */}
@@ -254,7 +441,7 @@ export function LinksManagerClient({
         </div>
       ) : (
         <>
-          <div className="table-container">
+          <div className="table-container orders-table-container">
             <div className="table-container__header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0 }}>Customer Links</h3>
               <button className="button secondary" onClick={() => setShowBulkImport(true)}>
@@ -266,131 +453,28 @@ export function LinksManagerClient({
                 <thead>
                   <tr>
                     <th>Customer</th>
-                    <th>Catalog</th>
                     <th>Status</th>
-                    <th>Visibility</th>
-                    <th>Order</th>
-                    <th>Updated</th>
                     <th>Link</th>
+                    <th>Date Created</th>
+                    <th>Order</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {links.map((link) => (
                     <tr key={link.id}>
-                      <td style={{ fontWeight: 600 }}>{link.customer_name}</td>
-                      <td>{link.catalogs?.version_label}</td>
                       <td>
-                        <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
-                          <span className="badge__dot" />
-                          {link.active ? "active" : "disabled"}
-                        </span>
-                      </td>
-                      <td>
-                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
-                          <input
-                            type="checkbox"
-                            checked={link.show_upc !== false}
-                            onChange={() => void toggleVisibility(link.id, "show_upc", link.show_upc !== false)}
-                          />
-                          UPC
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer", marginTop: 2 }}>
-                          <input
-                            type="checkbox"
-                            checked={link.show_price === true}
-                            onChange={() => void toggleVisibility(link.id, "show_price", link.show_price === true)}
-                          />
-                          Price
-                        </label>
-                      </td>
-                      <td>
-                        {link.has_order ? (
-                          <div className="muted">
-                            {link.total_skus ?? 0} SKUs / {link.total_cases ?? 0} cases
-                          </div>
-                        ) : (
-                          <span className="muted">No order yet</span>
-                        )}
-                      </td>
-                      <td>
-                        {link.updated_at ? new Date(link.updated_at).toLocaleString() : "-"}
-                      </td>
-                      <td>
-                        {link.url ? (
-                          <div className="url-display">
-                            <a href={link.url} target="_blank" rel="noreferrer">
-                              {link.url}
-                            </a>
-                            <button
-                              type="button"
-                              className="button secondary"
-                              style={{ padding: "6px 10px" }}
-                              onClick={() => void copyToClipboard(link.url)}
-                            >
-                              Copy
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="muted">Set APP_BASE_URL</span>
-                        )}
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <select
-                            className="input"
-                            style={{ minWidth: 170 }}
-                            value={catalogDraftByLinkId[link.id] ?? link.catalog_id}
-                            onChange={(e) =>
-                              setCatalogDraftByLinkId((prev) => ({
-                                ...prev,
-                                [link.id]: e.target.value,
-                              }))
-                            }
-                          >
-                            {catalogOptionForLink(link).map((catalog) => (
-                              <option key={catalog.id} value={catalog.id}>
-                                {catalog.version_label}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="button secondary"
-                            onClick={() => void updateLinkCatalog(link.id)}
-                            disabled={
-                              (catalogDraftByLinkId[link.id] ?? link.catalog_id) ===
-                              link.catalog_id
-                            }
-                          >
-                            Update Catalog
-                          </button>
-                          {link.order_id ? (
-                            <>
-                              <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
-                                Edit
-                              </Link>
-                              {link.has_order && (
-                                <a className="button secondary" href={`/api/admin/orders/${link.order_id}/csv`} download>
-                                  CSV
-                                </a>
-                              )}
-                              <OrderDeleteButton orderId={link.order_id} onDeleted={() => void loadLinks()} />
-                            </>
-                          ) : null}
-                          <button
-                            className="button secondary"
-                            onClick={() => void toggleLink(link.id, link.active)}
-                          >
-                            {link.active ? "Disable" : "Enable"}
-                          </button>
-                          <button
-                            className="button secondary"
-                            style={{ color: "var(--red)" }}
-                            onClick={() => void deleteLink(link.id)}
-                          >
-                            Delete
-                          </button>
+                        <div className="orders-customer">
+                          <strong>{link.customer_name}</strong>
+                          <span>{link.catalogs?.version_label}</span>
                         </div>
+                      </td>
+                      <td>{renderStatus(link)}</td>
+                      <td>{renderLink(link)}</td>
+                      <td>{formatDateTime(link.created_at)}</td>
+                      <td>{renderOrder(link)}</td>
+                      <td>
+                        {renderRowMenu(link)}
                       </td>
                     </tr>
                   ))}
@@ -405,96 +489,29 @@ export function LinksManagerClient({
               <div className="mobile-card" key={link.id}>
                 <div className="mobile-card__row">
                   <span className="mobile-card__label">Customer</span>
-                  <span className="mobile-card__value" style={{ fontWeight: 600 }}>{link.customer_name}</span>
-                </div>
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">Catalog</span>
-                  <span className="mobile-card__value">{link.catalogs?.version_label}</span>
+                  <span className="mobile-card__value">
+                    <span className="orders-mobile-customer">{link.customer_name}</span>
+                    <span className="muted">{link.catalogs?.version_label}</span>
+                  </span>
                 </div>
                 <div className="mobile-card__row">
                   <span className="mobile-card__label">Status</span>
-                  <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
-                    <span className="badge__dot" />
-                    {link.active ? "active" : "disabled"}
-                  </span>
+                  {renderStatus(link)}
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Link</span>
+                  {renderLink(link)}
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Date Created</span>
+                  <span className="mobile-card__value">{formatDateTime(link.created_at)}</span>
                 </div>
                 <div className="mobile-card__row">
                   <span className="mobile-card__label">Order</span>
-                  <span className="mobile-card__value">
-                    {link.has_order
-                      ? `${link.total_skus ?? 0} SKUs / ${link.total_cases ?? 0} cases`
-                      : "No order yet"}
-                  </span>
+                  {renderOrder(link)}
                 </div>
-                {link.url && (
-                  <div style={{ marginTop: 8 }}>
-                    <div className="url-display">
-                      <a href={link.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
-                        {link.url}
-                      </a>
-                      <button
-                        type="button"
-                        className="button secondary"
-                        style={{ padding: "4px 8px", fontSize: 12 }}
-                        onClick={() => void copyToClipboard(link.url)}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
                 <div className="mobile-card__actions">
-                  <select
-                    className="input"
-                    value={catalogDraftByLinkId[link.id] ?? link.catalog_id}
-                    onChange={(e) =>
-                      setCatalogDraftByLinkId((prev) => ({
-                        ...prev,
-                        [link.id]: e.target.value,
-                      }))
-                    }
-                  >
-                    {catalogOptionForLink(link).map((catalog) => (
-                      <option key={catalog.id} value={catalog.id}>
-                        {catalog.version_label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="button secondary"
-                    onClick={() => void updateLinkCatalog(link.id)}
-                    disabled={
-                      (catalogDraftByLinkId[link.id] ?? link.catalog_id) === link.catalog_id
-                    }
-                  >
-                    Update Catalog
-                  </button>
-                  {link.order_id ? (
-                    <>
-                      <Link className="button secondary" href={`/admin/orders/${link.order_id}`}>
-                        Edit Order
-                      </Link>
-                      {link.has_order && (
-                        <a className="button secondary" href={`/api/admin/orders/${link.order_id}/csv`} download>
-                          CSV
-                        </a>
-                      )}
-                      <OrderDeleteButton orderId={link.order_id} onDeleted={() => void loadLinks()} />
-                    </>
-                  ) : null}
-                  <button
-                    className="button secondary"
-                    onClick={() => void toggleLink(link.id, link.active)}
-                  >
-                    {link.active ? "Disable" : "Enable"}
-                  </button>
-                  <button
-                    className="button secondary"
-                    style={{ color: "var(--red)" }}
-                    onClick={() => void deleteLink(link.id)}
-                  >
-                    Delete
-                  </button>
+                  {renderRowMenu(link)}
                 </div>
               </div>
             ))}

@@ -986,6 +986,167 @@ a {
   font-weight: 500;
 }
 
+/* ===== Admin Orders ===== */
+
+.orders-table-container,
+.orders-table-container .table-container__body {
+  overflow: visible;
+}
+
+.orders-customer,
+.orders-order,
+.orders-status {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.orders-customer strong,
+.orders-mobile-customer {
+  font-weight: 700;
+}
+
+.orders-customer span,
+.orders-order__edit {
+  font-size: 12px;
+}
+
+.orders-customer span {
+  color: var(--muted);
+}
+
+.orders-status {
+  align-items: start;
+}
+
+.orders-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 6px 8px;
+}
+
+.orders-link a {
+  max-width: min(34vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.orders-link__copy {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.orders-order__edit {
+  font-weight: 700;
+}
+
+.orders-menu {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.orders-menu__trigger {
+  white-space: nowrap;
+}
+
+.orders-menu__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 12px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+}
+
+.orders-menu__group {
+  display: grid;
+  gap: 8px;
+}
+
+.orders-menu__catalog-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.orders-menu__toggles label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.orders-menu__actions {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.orders-menu__actions .button {
+  width: 100%;
+  text-align: center;
+}
+
+.orders-menu__danger {
+  color: var(--red) !important;
+}
+
+.orders-mobile-customer {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .orders-link {
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+
+  .orders-link a {
+    max-width: 42vw;
+  }
+
+  .orders-status {
+    justify-items: end;
+  }
+
+  .orders-order {
+    justify-items: end;
+  }
+
+  .orders-menu {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .orders-menu__trigger {
+    width: 100%;
+  }
+
+  .orders-menu__panel {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+  }
+}
+
 /* Barcode scanner overlay */
 .scannerOverlay {
   position: fixed;

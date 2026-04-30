@@ -30,7 +30,7 @@ export default async function AdminOrdersPage() {
 
   const { data: links } = await admin
     .from("customer_links")
-    .select("id,token,catalog_id,customer_name,active,created_at,catalogs(version_label)")
+    .select("id,token,catalog_id,customer_name,active,show_upc,show_price,created_at,catalogs(version_label)")
     .order("created_at", { ascending: false });
 
   const linkIds = (links ?? []).map((link) => link.id);
