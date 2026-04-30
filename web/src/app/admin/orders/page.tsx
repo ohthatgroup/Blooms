@@ -41,12 +41,13 @@ export default async function AdminOrdersPage() {
       total_skus: number;
       total_cases: number;
       updated_at: string | null;
+      csv_columns: unknown;
     }
   >();
   if (linkIds.length > 0) {
     const { data: activeOrders } = await admin
       .from("orders")
-      .select("id,customer_link_id,total_skus,total_cases,updated_at")
+      .select("id,customer_link_id,total_skus,total_cases,updated_at,csv_columns")
       .in("customer_link_id", linkIds)
       .is("archived_at", null);
 
@@ -58,6 +59,7 @@ export default async function AdminOrdersPage() {
           total_skus: order.total_skus ?? 0,
           total_cases: order.total_cases ?? 0,
           updated_at: order.updated_at ?? null,
+          csv_columns: order.csv_columns,
         },
       ]),
     );
@@ -72,6 +74,7 @@ export default async function AdminOrdersPage() {
     total_skus: activeOrdersByLinkId.get(link.id)?.total_skus ?? 0,
     total_cases: activeOrdersByLinkId.get(link.id)?.total_cases ?? 0,
     updated_at: activeOrdersByLinkId.get(link.id)?.updated_at ?? null,
+    csv_columns: activeOrdersByLinkId.get(link.id)?.csv_columns ?? null,
   }));
 
   return (

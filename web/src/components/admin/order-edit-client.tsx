@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { OrderDeleteButton } from "@/components/admin/order-delete-button";
+import {
+  buildOrderCsv,
+  normalizeOrderCsvColumns,
+  ORDER_CSV_COLUMNS,
+  type OrderCsvColumn,
+} from "@/lib/catalog/csv";
 
 interface OrderEditItem {
   sku: string;
@@ -28,6 +34,7 @@ interface OrderEditClientProps {
   initialCustomerName: string;
   initialItems: OrderEditItem[];
   catalogProducts: CatalogProductOption[];
+  initialCsvColumns: unknown;
 }
 
 export function OrderEditClient({
@@ -35,6 +42,7 @@ export function OrderEditClient({
   initialCustomerName,
   initialItems,
   catalogProducts,
+  initialCsvColumns,
 }: OrderEditClientProps) {
   const [customerName, setCustomerName] = useState(initialCustomerName);
   const [items, setItems] = useState(initialItems);
@@ -47,6 +55,10 @@ export function OrderEditClient({
   const [customSku, setCustomSku] = useState("");
   const [customName, setCustomName] = useState("");
   const [customQty, setCustomQty] = useState(1);
+  const [csvColumns, setCsvColumns] = useState<OrderCsvColumn[]>(() =>
+    normalizeOrderCsvColumns(initialCsvColumns),
+  );
+  const [savingCsvColumns, setSavingCsvColumns] = useState(false);
 
   const productOrderBySku = useMemo(
     () =>
@@ -156,27 +168,57 @@ export function OrderEditClient({
     setCustomQty(1);
   }
 
+  function toggleCsvColumn(column: OrderCsvColumn) {
+    setCsvColumns((prev) => {
+      if (prev.includes(column)) {
+        return prev.length === 1 ? prev : prev.filter((value) => value !== column);
+      }
+      return ORDER_CSV_COLUMNS
+        .map((option) => option.key)
+        .filter((value) => value === column || prev.includes(value));
+    });
+  }
+
+  async function saveCsvColumns() {
+    setSavingCsvColumns(true);
+    setMessage("");
+    const response = await fetch(`/api/admin/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ csv_columns: csvColumns }),
+    });
+    const body = await response.json().catch(() => ({}));
+    setSavingCsvColumns(false);
+
+    if (!response.ok) {
+      setMessage(body.error || "Failed to save CSV columns");
+      return;
+    }
+
+    setCsvColumns(normalizeOrderCsvColumns(body.order?.csv_columns));
+    setMessage("CSV columns updated.");
+  }
+
   function downloadCsv() {
     const activeItems = items.filter((item) => item.qty > 0);
     if (activeItems.length === 0) return;
 
-    const sorted = [...activeItems].sort(
-      (a, b) => a.category.localeCompare(b.category) || a.product_name.localeCompare(b.product_name),
-    );
     const now = new Date();
-    const dateStr = `${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()}`;
     const name = customerName.trim() || "Customer";
-    const header = "Customer,Date,SKU,Product,UPC,Pack,Qty,Note";
-    const rows = sorted.map(
-      (item) => {
-        const safeNote = (item.note ?? "").replaceAll('"', '""');
-        return `"${name}","${dateStr}","${item.sku}","${item.product_name.replaceAll(",", " ")}","${item.upc ?? ""}","${item.pack ?? ""}",${item.qty},"${safeNote}"`;
-      },
-    );
-    const csv = [header, ...rows].join("\n");
-    const fileDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const safeName = name.replaceAll(/\s+/g, "_").replaceAll(/[^a-zA-Z0-9_]/g, "");
-    const fileName = `Blooms_Order_${safeName}_${fileDate}.csv`;
+    const { csv, fileName } = buildOrderCsv({
+      customerName: name,
+      orderDate: now,
+      columns: csvColumns,
+      items: activeItems.map((item) => ({
+        sku: item.sku,
+        name: item.product_name,
+        upc: item.upc,
+        pack: item.pack,
+        category: item.category,
+        qty: item.qty,
+        note: item.note,
+      })),
+    });
 
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -332,6 +374,34 @@ export function OrderEditClient({
         <div className="stat-card stat-card--green">
           <div className="stat-card__value">{totals.cases}</div>
           <div className="stat-card__label">Total Cases</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>CSV Export Columns</h3>
+        <div className="csv-column-grid">
+          {ORDER_CSV_COLUMNS.map((column) => (
+            <label key={column.key} className="csv-column-option">
+              <input
+                type="checkbox"
+                checked={csvColumns.includes(column.key)}
+                onChange={() => toggleCsvColumn(column.key)}
+              />
+              {column.label}
+            </label>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+          <button
+            className="button secondary"
+            onClick={saveCsvColumns}
+            disabled={savingCsvColumns || csvColumns.length === 0}
+          >
+            {savingCsvColumns ? "Saving..." : "Save CSV Columns"}
+          </button>
+          <span className="form-hint">
+            These columns are used by this order&apos;s CSV download.
+          </span>
         </div>
       </div>
 

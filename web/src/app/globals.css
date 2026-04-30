@@ -1113,6 +1113,30 @@ a {
   display: block;
 }
 
+.csv-column-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.csv-column-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.csv-column-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafaf8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 @media (max-width: 767px) {
   .orders-link {
     justify-content: flex-end;

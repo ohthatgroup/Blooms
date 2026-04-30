@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
-import { buildOrderCsv } from "@/lib/catalog/csv";
+import { buildOrderCsv, normalizeOrderCsvColumns } from "@/lib/catalog/csv";
 import { buildDealNoteMap } from "@/lib/deals/csv-note";
 
 export async function GET(
@@ -13,7 +13,7 @@ export async function GET(
   const { id } = await context.params;
   const { data: order, error: orderError } = await auth.admin
     .from("orders")
-    .select("id,customer_name,catalog_id")
+    .select("id,customer_name,catalog_id,csv_columns")
     .eq("id", id)
     .is("archived_at", null)
     .single();
@@ -51,6 +51,7 @@ export async function GET(
 
   const { csv, fileName } = buildOrderCsv({
     customerName: order.customer_name,
+    columns: normalizeOrderCsvColumns(order.csv_columns),
     items: items.map((item) => ({
       sku: item.sku,
       name: item.product_name,

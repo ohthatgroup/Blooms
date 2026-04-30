@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+const orderCsvColumnSchema = z.enum([
+  "customer",
+  "date",
+  "sku",
+  "product",
+  "upc",
+  "pack",
+  "qty",
+  "note",
+]);
+
 export const createCatalogSchema = z.object({
   versionLabel: z.string().min(1).max(120),
   pdfStoragePath: z.string().min(1),
@@ -175,6 +186,10 @@ export const patchOrderSchema = z.object({
       }),
     )
     .min(1),
+});
+
+export const patchOrderCsvColumnsSchema = z.object({
+  csv_columns: z.array(orderCsvColumnSchema).min(1),
 });
 
 export const importCatalogSchema = z.object({

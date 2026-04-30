@@ -4,6 +4,11 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { OrderDeleteButton } from "@/components/admin/order-delete-button";
 import { BulkImportClient } from "@/components/admin/bulk-import-client";
+import {
+  normalizeOrderCsvColumns,
+  ORDER_CSV_COLUMNS,
+  type OrderCsvColumn,
+} from "@/lib/catalog/csv";
 
 interface CatalogOption {
   id: string;
@@ -26,6 +31,7 @@ interface LinkRow {
   total_skus?: number;
   total_cases?: number;
   updated_at?: string | null;
+  csv_columns?: unknown;
 }
 
 interface LinksManagerClientProps {
@@ -46,6 +52,18 @@ export function LinksManagerClient({
     Record<string, string>
   >(() =>
     Object.fromEntries(initialLinks.map((link) => [link.id, link.catalog_id])),
+  );
+  const [csvColumnsByOrderId, setCsvColumnsByOrderId] = useState<
+    Record<string, OrderCsvColumn[]>
+  >(() =>
+    Object.fromEntries(
+      initialLinks
+        .filter((link) => link.order_id)
+        .map((link) => [
+          link.order_id as string,
+          normalizeOrderCsvColumns(link.csv_columns),
+        ]),
+    ),
   );
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -98,6 +116,16 @@ export function LinksManagerClient({
     setLinks(nextLinks);
     setCatalogDraftByLinkId(
       Object.fromEntries(nextLinks.map((link: LinkRow) => [link.id, link.catalog_id])),
+    );
+    setCsvColumnsByOrderId(
+      Object.fromEntries(
+        nextLinks
+          .filter((link: LinkRow) => link.order_id)
+          .map((link: LinkRow) => [
+            link.order_id as string,
+            normalizeOrderCsvColumns(link.csv_columns),
+          ]),
+      ),
     );
   };
 
@@ -213,6 +241,41 @@ export function LinksManagerClient({
     await loadLinks();
   }
 
+  function toggleOrderCsvColumn(orderId: string, column: OrderCsvColumn) {
+    setCsvColumnsByOrderId((prev) => {
+      const current = prev[orderId] ?? normalizeOrderCsvColumns(null);
+      const next = current.includes(column)
+        ? current.length === 1
+          ? current
+          : current.filter((value) => value !== column)
+        : ORDER_CSV_COLUMNS
+            .map((option) => option.key)
+            .filter((value) => value === column || current.includes(value));
+
+      return { ...prev, [orderId]: next };
+    });
+  }
+
+  async function updateOrderCsvColumns(orderId: string) {
+    const columns = csvColumnsByOrderId[orderId] ?? normalizeOrderCsvColumns(null);
+    const response = await fetch(`/api/admin/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ csv_columns: columns }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(body.error || "Failed to update CSV columns");
+      return;
+    }
+    setCsvColumnsByOrderId((prev) => ({
+      ...prev,
+      [orderId]: normalizeOrderCsvColumns(body.order?.csv_columns),
+    }));
+    setMessage("CSV columns updated");
+    await loadLinks();
+  }
+
   const renderStatus = (link: LinkRow) => (
     <div className="orders-status">
       <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
@@ -258,6 +321,9 @@ export function LinksManagerClient({
   const renderRowMenu = (link: LinkRow) => {
     const menuOpen = openMenuId === link.id;
     const selectedCatalogId = catalogDraftByLinkId[link.id] ?? link.catalog_id;
+    const csvColumns = link.order_id
+      ? csvColumnsByOrderId[link.order_id] ?? normalizeOrderCsvColumns(link.csv_columns)
+      : normalizeOrderCsvColumns(null);
 
     return (
       <div className="orders-menu">
@@ -327,6 +393,31 @@ export function LinksManagerClient({
                 Show price
               </label>
             </div>
+
+            {link.order_id ? (
+              <div className="orders-menu__group">
+                <div className="form-label">Order CSV columns</div>
+                <div className="csv-column-grid csv-column-grid--compact">
+                  {ORDER_CSV_COLUMNS.map((column) => (
+                    <label key={column.key} className="csv-column-option">
+                      <input
+                        type="checkbox"
+                        checked={csvColumns.includes(column.key)}
+                        onChange={() => toggleOrderCsvColumn(link.order_id!, column.key)}
+                      />
+                      {column.label}
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => void updateOrderCsvColumns(link.order_id!)}
+                >
+                  Save CSV columns
+                </button>
+              </div>
+            ) : null}
 
             <div className="orders-menu__group orders-menu__actions">
               {link.order_id ? (
