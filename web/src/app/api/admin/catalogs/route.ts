@@ -58,13 +58,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error: jobError } = await auth.admin.from("parser_jobs").insert({
-    catalog_id: catalog.id,
-    status: "queued",
-    attempts: 0,
-  });
+  const { data: parserJob, error: jobError } = await auth.admin
+    .from("parser_jobs")
+    .insert({
+      catalog_id: catalog.id,
+      status: "queued",
+      attempts: 0,
+    })
+    .select("id")
+    .single();
 
-  if (jobError) {
+  if (jobError || !parserJob) {
     return NextResponse.json(
       { error: "Catalog created but job queue failed", catalog_id: catalog.id },
       { status: 500 },
@@ -79,8 +83,17 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       catalog_id: catalog.id,
+      parser_job_id: parserJob.id,
+      pdf_storage_path: parsed.data.pdfStoragePath,
       parser_triggered: workflowResult.triggered,
       parser_trigger_message: workflowResult.message,
+      workflow_run_url: workflowResult.workflowRunUrl,
+      workflow_run_confirmed: workflowResult.workflowRunConfirmed ?? false,
+      next_action: workflowResult.triggered
+        ? workflowResult.workflowRunConfirmed
+          ? "wait_for_parser"
+          : "check_github_actions"
+        : "retry_trigger",
     },
     { status: 201 },
   );

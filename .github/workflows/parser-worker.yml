@@ -30,6 +30,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       PARSER_POLL_SECONDS: "10"
       PARSER_LOG_LEVEL: "INFO"
+      PARSER_MAX_RUN_SECONDS: "1020"
+      PARSER_STALE_PROCESSING_MINUTES: "15"
 
     steps:
       - name: Checkout

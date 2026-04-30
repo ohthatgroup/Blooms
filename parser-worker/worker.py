@@ -5,7 +5,7 @@ import logging
 import os
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,6 +20,8 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 PARSER_POLL_SECONDS = int(os.environ.get("PARSER_POLL_SECONDS", "10"))
 LOG_LEVEL = os.environ.get("PARSER_LOG_LEVEL", "INFO")
+PARSER_MAX_RUN_SECONDS = int(os.environ.get("PARSER_MAX_RUN_SECONDS", "1020"))
+PARSER_STALE_PROCESSING_MINUTES = int(os.environ.get("PARSER_STALE_PROCESSING_MINUTES", "15"))
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL.upper(), logging.INFO))
 logger = logging.getLogger("parser-worker")
@@ -28,6 +30,10 @@ ASSUMED_ITEMS_PER_PAGE = 16
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _stale_processing_cutoff_iso() -> str:
+    return (datetime.now(timezone.utc) - timedelta(minutes=PARSER_STALE_PROCESSING_MINUTES)).isoformat()
 
 
 def get_client() -> Client:
@@ -240,24 +246,49 @@ def claim_next_job(client: Client):
         .execute()
     )
     rows = result.data or []
+    reclaimed_stale_job = False
+    if not rows:
+        stale_result = (
+            client.table("parser_jobs")
+            .select("id,catalog_id,status,attempts,started_at")
+            .eq("status", "processing")
+            .is_("finished_at", "null")
+            .lt("started_at", _stale_processing_cutoff_iso())
+            .order("started_at")
+            .limit(1)
+            .execute()
+        )
+        rows = stale_result.data or []
+        reclaimed_stale_job = bool(rows)
+
     if not rows:
         return None
 
     job = rows[0]
+    if reclaimed_stale_job:
+        logger.warning(
+            "Reclaiming stale parser job %s catalog=%s started_at=%s",
+            job["id"],
+            job["catalog_id"],
+            job.get("started_at"),
+        )
+
     attempts = int(job.get("attempts") or 0) + 1
     client.table("parser_jobs").update(
         {
             "status": "processing",
             "attempts": attempts,
             "started_at": now_iso(),
-            "error_log": None,
+            "error_log": None
+            if not reclaimed_stale_job
+            else "Previous parser run stalled or was canceled before completion; retrying.",
             "total_items": 0,
             "reused_items": 0,
             "queued_items": 0,
             "processed_items": 0,
             "failed_items": 0,
             "progress_percent": 0,
-            "progress_label": "queued",
+            "progress_label": "retrying_after_stall" if reclaimed_stale_job else "queued",
             "parsed_pages": 0,
             "total_pages": 0,
         }
@@ -266,7 +297,10 @@ def claim_next_job(client: Client):
     client.table("catalogs").update(
         {
             "parse_status": "processing",
-            "parse_summary": {"progress_percent": 0, "progress_label": "queued"},
+            "parse_summary": {
+                "progress_percent": 0,
+                "progress_label": "retrying_after_stall" if reclaimed_stale_job else "queued",
+            },
         }
     ).eq("id", job["catalog_id"]).execute()
     return job
@@ -288,22 +322,76 @@ def _dedupe_candidates(candidates: list[QuickCandidate]) -> list[QuickCandidate]
     return list(unique.values())
 
 
-def process_job(client: Client, job: dict):
+def _should_pause_for_time_budget(deadline: float | None) -> bool:
+    return deadline is not None and time.monotonic() >= deadline
+
+
+def _pause_job_for_retry(
+    client: Client,
+    *,
+    job_id: str,
+    catalog_id: str,
+    progress: dict,
+) -> None:
+    message = (
+        "Parser paused before the GitHub Actions timeout. "
+        "The next scheduled or manual parser run will resume from cached item progress."
+    )
+    client.table("parser_jobs").update(
+        {
+            "status": "queued",
+            "error_log": message,
+            "progress_label": "paused_time_budget",
+            "progress_percent": progress["progress_percent"],
+        }
+    ).eq("id", job_id).execute()
+    client.table("catalogs").update(
+        {
+            "parse_status": "queued",
+            "parse_summary": {**progress, "progress_label": "paused_time_budget"},
+        }
+    ).eq("id", catalog_id).execute()
+
+
+def _catalog_is_deleted(client: Client, catalog_id: str) -> bool:
+    result = (
+        client.table("catalogs")
+        .select("id,deleted_at,status")
+        .eq("id", catalog_id)
+        .maybe_single()
+        .execute()
+    )
+    catalog = result.data
+    return not catalog or bool(catalog.get("deleted_at")) or catalog.get("status") == "archived"
+
+
+def _discard_deleted_catalog_job(client: Client, *, job_id: str, catalog_id: str) -> None:
+    logger.info("Discarding parser job %s because catalog %s was deleted", job_id, catalog_id)
+    client.table("parser_jobs").delete().eq("id", job_id).execute()
+
+
+def process_job(client: Client, job: dict) -> bool:
     job_id = job["id"]
     catalog_id = job["catalog_id"]
     logger.info("Processing parser job %s catalog=%s", job_id, catalog_id)
+    deadline = (
+        time.monotonic() + PARSER_MAX_RUN_SECONDS
+        if PARSER_MAX_RUN_SECONDS > 0
+        else None
+    )
 
     try:
         catalog_resp = (
             client.table("catalogs")
-            .select("id,pdf_storage_path")
+            .select("id,pdf_storage_path,deleted_at,status")
             .eq("id", catalog_id)
-            .single()
+            .maybe_single()
             .execute()
         )
         catalog = catalog_resp.data
-        if not catalog:
-            raise RuntimeError(f"Catalog not found: {catalog_id}")
+        if not catalog or catalog.get("deleted_at") or catalog.get("status") == "archived":
+            _discard_deleted_catalog_job(client, job_id=job_id, catalog_id=catalog_id)
+            return True
 
         pdf_path = catalog["pdf_storage_path"]
         file_bytes = client.storage.from_("catalog-pdfs").download(pdf_path)
@@ -450,7 +538,41 @@ def process_job(client: Client, job: dict):
                 parsed_items = parse_catalog_pdf(tmp_pdf, sku_filter=queued_skus)
                 parsed_by_sku = {item.sku: item for item in parsed_items}
 
-                for sku, candidate in queued_candidates.items():
+                for item_index, (sku, candidate) in enumerate(queued_candidates.items(), start=1):
+                    if item_index == 1 or item_index % 25 == 0:
+                        if _catalog_is_deleted(client, catalog_id):
+                            _discard_deleted_catalog_job(
+                                client,
+                                job_id=job_id,
+                                catalog_id=catalog_id,
+                            )
+                            return True
+
+                    if _should_pause_for_time_budget(deadline):
+                        progress = _summarize_progress(
+                            total_items=total_items,
+                            raw_candidates=raw_candidates,
+                            reused_items=reused_items,
+                            queued_items=queued_items,
+                            processed_items=processed_items,
+                            failed_items=failed_items,
+                            parsed_pages=total_pages,
+                            total_pages=total_pages,
+                            capture_verification=capture_verification,
+                        )
+                        _pause_job_for_retry(
+                            client,
+                            job_id=job_id,
+                            catalog_id=catalog_id,
+                            progress=progress,
+                        )
+                        logger.info(
+                            "Parser job %s paused at %s%% before workflow timeout",
+                            job_id,
+                            progress["progress_percent"],
+                        )
+                        return False
+
                     client.table("parser_job_items").update(
                         {
                             "status": "processing",
@@ -583,6 +705,10 @@ def process_job(client: Client, job: dict):
                     )
 
             if catalog_item_rows:
+                if _catalog_is_deleted(client, catalog_id):
+                    _discard_deleted_catalog_job(client, job_id=job_id, catalog_id=catalog_id)
+                    return True
+
                 client.table("catalog_items").upsert(
                     catalog_item_rows,
                     on_conflict="catalog_id,sku",
@@ -646,6 +772,7 @@ def process_job(client: Client, job: dict):
             ).eq("id", job_id).execute()
 
             logger.info("Parser job %s completed: %s", job_id, summary)
+            return True
     except Exception as exc:
         message = str(exc)[:4000]
         logger.exception("Parser job %s failed: %s", job_id, message)
@@ -660,6 +787,7 @@ def process_job(client: Client, job: dict):
                 "progress_label": "failed",
             }
         ).eq("id", job_id).execute()
+        return True
 
 
 def run_once():
@@ -668,8 +796,7 @@ def run_once():
     if not job:
         logger.info("No queued parser jobs.")
         return False
-    process_job(client, job)
-    return True
+    return process_job(client, job)
 
 
 def run_forever():

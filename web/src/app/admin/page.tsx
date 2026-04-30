@@ -3,7 +3,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { CatalogUploadPanel } from "@/components/admin/catalog-upload-panel";
 import { CatalogXlsxUpload } from "@/components/admin/catalog-xlsx-upload";
 import { CatalogDeleteButton } from "@/components/admin/catalog-delete-button";
+import { CatalogParserStatusDetails } from "@/components/admin/catalog-parser-status-details";
 import { AutoRefreshWhenEnabled } from "@/components/admin/auto-refresh-when-enabled";
+import { classifyParserHealth } from "@/lib/parser/status";
+import type { ParserJob } from "@/lib/types";
 
 export default async function AdminPage() {
   const admin = createSupabaseAdminClient();
@@ -14,11 +17,33 @@ export default async function AdminPage() {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
-  const hasActiveParse = (catalogs ?? []).some(
-    (catalog) => catalog.parse_status === "queued" || catalog.parse_status === "processing",
-  );
-
   const catalogList = catalogs ?? [];
+  const catalogIds = catalogList.map((catalog) => catalog.id);
+  const { data: parserJobs } = catalogIds.length > 0
+    ? await admin
+        .from("parser_jobs")
+        .select(
+          "id,catalog_id,status,attempts,error_log,created_at,started_at,finished_at,total_items,reused_items,queued_items,processed_items,failed_items,progress_percent,progress_label,parsed_pages,total_pages",
+        )
+        .in("catalog_id", catalogIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  const latestJobByCatalog = new Map<string, Partial<ParserJob>>();
+  for (const job of (parserJobs ?? []) as Partial<ParserJob>[]) {
+    if (job.catalog_id && !latestJobByCatalog.has(job.catalog_id)) {
+      latestJobByCatalog.set(job.catalog_id, job);
+    }
+  }
+
+  const catalogHealth = new Map(
+    catalogList.map((catalog) => [
+      catalog.id,
+      classifyParserHealth(catalog, latestJobByCatalog.get(catalog.id) ?? null),
+    ]),
+  );
+  const hasActiveParse = Array.from(catalogHealth.values()).some(
+    (health) => health.kind === "queued_waiting" || health.kind === "processing",
+  );
   const totalCatalogs = catalogList.length;
   const publishedCount = catalogList.filter((c) => c.status === "published").length;
   const draftCount = catalogList.filter((c) => c.status === "draft").length;
@@ -51,12 +76,14 @@ export default async function AdminPage() {
       </div>
 
       {/* Upload Section */}
-      <CatalogUploadPanel />
-      <CatalogXlsxUpload
-        catalogs={catalogList
-          .filter((c) => !c.parse_status || c.parse_status === "complete" || c.parse_status === "needs_review")
-          .map((c) => ({ id: c.id, version_label: c.version_label }))}
-      />
+      <CatalogUploadPanel>
+        <CatalogXlsxUpload
+          embedded
+          catalogs={catalogList
+            .filter((c) => !c.parse_status || c.parse_status === "complete" || c.parse_status === "needs_review")
+            .map((c) => ({ id: c.id, version_label: c.version_label }))}
+        />
+      </CatalogUploadPanel>
 
       {/* Catalogs Table */}
       <div className="section-header">
@@ -89,6 +116,8 @@ export default async function AdminPage() {
                 </thead>
                 <tbody>
                   {catalogList.map((catalog) => {
+                    const parserJob = latestJobByCatalog.get(catalog.id) ?? null;
+                    const health = catalogHealth.get(catalog.id)!;
                     const summary = (catalog.parse_summary ?? {}) as {
                       new_items?: number;
                       updated_items?: number;
@@ -101,27 +130,13 @@ export default async function AdminPage() {
                       capture_verification_passed?: boolean;
                       capture_verification_message?: string;
                     };
-                    const parseProgress = Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        Number.isFinite(summary.progress_percent)
-                          ? Number(summary.progress_percent)
-                          : catalog.parse_status === "complete" ||
-                              catalog.parse_status === "needs_review"
-                            ? 100
-                            : 0,
-                      ),
-                    );
-                    const parseActive =
-                      catalog.parse_status === "queued" || catalog.parse_status === "processing";
                     const hasDiffSummary =
                       typeof summary.new_items === "number" ||
                       typeof summary.updated_items === "number" ||
                       typeof summary.unchanged_items === "number" ||
                       typeof summary.removed_items === "number";
                     const hasBlockingParseFailures =
-                      catalog.parse_status === "failed" || (summary.failed_items ?? 0) > 0;
+                      health.kind === "failed";
 
                     return (
                       <tr key={catalog.id}>
@@ -134,21 +149,21 @@ export default async function AdminPage() {
                         </td>
                         <td>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                            <span className={`badge badge--${parseActive ? "processing" : catalog.parse_status === "failed" ? "error" : "complete"}`}>
+                            <span className={`badge badge--${health.badge}`}>
                               <span className="badge__dot" />
-                              {catalog.parse_status}
+                              {health.label}
                             </span>
                           </div>
-                          {parseActive ? (
+                          {health.kind === "queued_waiting" || health.kind === "stuck_queued" || health.kind === "processing" || health.kind === "stalled_processing" ? (
                             <>
                               <div className="progress" style={{ width: 160 }}>
                                 <div
                                   className="progress__bar"
-                                  style={{ width: `${parseProgress}%` }}
+                                  style={{ width: `${health.progressPercent}%` }}
                                 />
                               </div>
                               <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                                {parseProgress}% (parsing)
+                                {health.progressPercent}% - {parserJob?.progress_label ?? "queued"}
                               </div>
                             </>
                           ) : (
@@ -167,7 +182,7 @@ export default async function AdminPage() {
                           {hasBlockingParseFailures && (
                             <span className="badge badge--error" style={{ marginTop: 4 }}>
                               <span className="badge__dot" />
-                              Failures: {summary.failed_items ?? 0}
+                              Failures: {parserJob?.failed_items ?? summary.failed_items ?? 0}
                             </span>
                           )}
                           {summary.capture_verification_passed === false && (
@@ -176,6 +191,11 @@ export default async function AdminPage() {
                               {summary.capture_verification_message ?? "Capture verification warning"}
                             </span>
                           )}
+                          <CatalogParserStatusDetails
+                            catalogId={catalog.id}
+                            parserJob={parserJob}
+                            health={health}
+                          />
                         </td>
                         <td>{new Date(catalog.created_at).toLocaleString()}</td>
                         <td>
@@ -185,7 +205,7 @@ export default async function AdminPage() {
                         </td>
                         <td>
                           <div style={{ display: "flex", gap: 8 }}>
-                            {parseProgress >= 100 && !parseActive && !hasBlockingParseFailures ? (
+                            {health.nextAction === "review_catalog" && !hasBlockingParseFailures ? (
                               <Link className="button secondary" href={`/admin/catalogs/${catalog.id}`}>
                                 Review
                               </Link>
@@ -208,6 +228,8 @@ export default async function AdminPage() {
           {/* Mobile Cards */}
           <div className="mobile-card-list">
             {catalogList.map((catalog) => {
+              const parserJob = latestJobByCatalog.get(catalog.id) ?? null;
+              const health = catalogHealth.get(catalog.id)!;
               const summary = (catalog.parse_summary ?? {}) as {
                 progress_percent?: number;
                 failed_items?: number;
@@ -220,22 +242,8 @@ export default async function AdminPage() {
                 capture_verification_passed?: boolean;
                 capture_verification_message?: string;
               };
-              const parseProgress = Math.max(
-                0,
-                Math.min(
-                  100,
-                  Number.isFinite(summary.progress_percent)
-                    ? Number(summary.progress_percent)
-                    : catalog.parse_status === "complete" ||
-                        catalog.parse_status === "needs_review"
-                      ? 100
-                      : 0,
-                ),
-              );
-              const parseActive =
-                catalog.parse_status === "queued" || catalog.parse_status === "processing";
               const hasBlockingParseFailures =
-                catalog.parse_status === "failed" || (summary.failed_items ?? 0) > 0;
+                health.kind === "failed";
 
               return (
                 <div className="mobile-card" key={catalog.id}>
@@ -252,21 +260,21 @@ export default async function AdminPage() {
                   </div>
                   <div className="mobile-card__row">
                     <span className="mobile-card__label">Parse</span>
-                    <span className={`badge badge--${parseActive ? "processing" : catalog.parse_status === "failed" ? "error" : "complete"}`}>
+                    <span className={`badge badge--${health.badge}`}>
                       <span className="badge__dot" />
-                      {catalog.parse_status}
+                      {health.label}
                     </span>
                   </div>
-                  {parseActive ? (
+                  {health.kind === "queued_waiting" || health.kind === "stuck_queued" || health.kind === "processing" || health.kind === "stalled_processing" ? (
                     <div style={{ margin: "8px 0" }}>
                       <div className="progress">
                         <div
                           className="progress__bar"
-                          style={{ width: `${parseProgress}%` }}
+                          style={{ width: `${health.progressPercent}%` }}
                         />
                       </div>
                       <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        {parseProgress}% (parsing)
+                        {health.progressPercent}% - {parserJob?.progress_label ?? "queued"}
                       </div>
                     </div>
                   ) : (
@@ -282,7 +290,7 @@ export default async function AdminPage() {
                   {hasBlockingParseFailures && (
                     <span className="badge badge--error" style={{ marginTop: 4 }}>
                       <span className="badge__dot" />
-                      Failures: {summary.failed_items ?? 0}
+                      Failures: {parserJob?.failed_items ?? summary.failed_items ?? 0}
                     </span>
                   )}
                   {summary.capture_verification_passed === false && (
@@ -291,12 +299,17 @@ export default async function AdminPage() {
                       {summary.capture_verification_message ?? "Capture verification warning"}
                     </span>
                   )}
+                  <CatalogParserStatusDetails
+                    catalogId={catalog.id}
+                    parserJob={parserJob}
+                    health={health}
+                  />
                   <div className="mobile-card__row">
                     <span className="mobile-card__label">Created</span>
                     <span className="mobile-card__value">{new Date(catalog.created_at).toLocaleDateString()}</span>
                   </div>
                   <div className="mobile-card__actions">
-                    {parseProgress >= 100 && !parseActive && !hasBlockingParseFailures ? (
+                    {health.nextAction === "review_catalog" && !hasBlockingParseFailures ? (
                       <Link className="button secondary" href={`/admin/catalogs/${catalog.id}`}>
                         Review
                       </Link>

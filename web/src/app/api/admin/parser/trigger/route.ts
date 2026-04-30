@@ -22,6 +22,7 @@ export async function POST(request: Request) {
         ok: false,
         message: result.message,
         status: result.status,
+        next_action: "retry_trigger",
       },
       { status: 400 },
     );
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
     ok: true,
     message: result.message,
     status: result.status,
+    workflow_run_url: result.workflowRunUrl,
+    workflow_run_confirmed: result.workflowRunConfirmed ?? false,
+    next_action: result.workflowRunConfirmed ? "wait_for_parser" : "check_github_actions",
   });
 }
-

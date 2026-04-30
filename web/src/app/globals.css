@@ -644,6 +644,149 @@ a {
   background: linear-gradient(90deg, #2e7d32, #66bb6a);
 }
 
+/* ===== Catalog Upload Observability ===== */
+
+.catalog-upload {
+  display: grid;
+  gap: 14px;
+}
+
+.upload-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upload-timeline__item {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafaf8;
+}
+
+.upload-timeline__item strong,
+.upload-timeline__item span {
+  display: block;
+}
+
+.upload-timeline__item strong {
+  font-size: 12px;
+}
+
+.upload-timeline__item span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.upload-timeline__status {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #bdbdbd;
+}
+
+.upload-timeline__item--active {
+  border-color: #bfdbfe;
+  background: var(--admin-blue-light);
+}
+
+.upload-timeline__item--active .upload-timeline__status {
+  background: var(--admin-blue);
+}
+
+.upload-timeline__item--done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.upload-timeline__item--done .upload-timeline__status {
+  background: var(--green);
+}
+
+.upload-timeline__item--error {
+  border-color: #ffcdd2;
+  background: #ffebee;
+}
+
+.upload-timeline__item--error .upload-timeline__status {
+  background: var(--red);
+}
+
+.secondary-import,
+.parser-debug {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.secondary-import > summary,
+.parser-debug > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.embedded-import {
+  margin-top: 12px;
+}
+
+.parser-debug {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.parser-debug__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.parser-debug__grid div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafaf8;
+}
+
+.parser-debug__grid strong,
+.parser-debug__grid span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.parser-debug__grid strong {
+  margin-bottom: 4px;
+}
+
+.parser-debug__message {
+  margin: 10px 0;
+}
+
+.parser-debug__error {
+  max-height: 160px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: #1d1d1d;
+  color: white;
+  white-space: pre-wrap;
+}
+
+.parser-debug__notice {
+  margin-top: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 /* ===== Section Header ===== */
 
 .section-header {

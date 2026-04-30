@@ -11,9 +11,10 @@ interface CatalogOption {
 
 interface CatalogXlsxUploadProps {
   catalogs?: CatalogOption[];
+  embedded?: boolean;
 }
 
-export function CatalogXlsxUpload({ catalogs = [] }: CatalogXlsxUploadProps) {
+export function CatalogXlsxUpload({ catalogs = [], embedded = false }: CatalogXlsxUploadProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"new" | "update">("new");
   const [existingCatalogId, setExistingCatalogId] = useState(catalogs[0]?.id ?? "");
@@ -28,8 +29,20 @@ export function CatalogXlsxUpload({ catalogs = [] }: CatalogXlsxUploadProps) {
   async function handleFile(file: File) {
     setMessage("");
     setFileName(file.name);
-    const buffer = await file.arrayBuffer();
-    const result = parseCatalogFile(buffer, file.name);
+    setItems([]);
+    setCategories([]);
+    setWarnings([]);
+
+    let result: ReturnType<typeof parseCatalogFile>;
+    try {
+      const buffer = await file.arrayBuffer();
+      result = parseCatalogFile(buffer, file.name);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown parse error";
+      setMessage(`Could not read "${file.name}": ${detail}`);
+      return;
+    }
+
     setItems(result.items);
     setCategories(result.categories);
     setWarnings(result.warnings);
@@ -88,8 +101,8 @@ export function CatalogXlsxUpload({ catalogs = [] }: CatalogXlsxUploadProps) {
     }
   }
 
-  return (
-    <div className="card">
+  const content = (
+    <>
       <h3 style={{ marginTop: 0 }}>Import from CSV/XLSX</h3>
 
       {/* Mode toggle */}
@@ -236,6 +249,10 @@ export function CatalogXlsxUpload({ catalogs = [] }: CatalogXlsxUploadProps) {
           {message}
         </span>
       )}
-    </div>
+    </>
   );
+
+  if (embedded) return <div className="embedded-import">{content}</div>;
+
+  return <div className="card">{content}</div>;
 }

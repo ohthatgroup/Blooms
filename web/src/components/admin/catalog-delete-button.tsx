@@ -17,7 +17,7 @@ export function CatalogDeleteButton({
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      "Archive this catalog? It will be hidden from the dashboard and all customer links for it will be disabled.",
+      "Delete this catalog? Draft catalogs are hard deleted. Catalogs with orders are archived, removed from the parser queue, and all customer links are disabled.",
     );
     if (!confirmed) return;
 
@@ -29,7 +29,7 @@ export function CatalogDeleteButton({
     setBusy(false);
 
     if (!response.ok) {
-      window.alert(body.error || "Failed to archive catalog");
+      window.alert(body.error || "Failed to delete catalog");
       return;
     }
 
