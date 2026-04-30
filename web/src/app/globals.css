@@ -1028,3 +1028,36 @@ a {
   border-bottom-color: var(--green-dark);
   font-weight: 600;
 }
+
+.reviewFilters__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.reviewFilters__title {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.reviewFilters__grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+@media (max-width: 900px) {
+  .reviewFilters__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .reviewFilters__grid {
+    grid-template-columns: 1fr;
+  }
+}

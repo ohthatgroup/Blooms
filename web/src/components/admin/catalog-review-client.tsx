@@ -50,6 +50,10 @@ interface ParserJobState {
   finished_at: string | null;
 }
 
+type ChangeFilter = "all" | "new" | "updated" | "unchanged";
+type ApprovalFilter = "all" | "pending" | "approved";
+type IssueFilter = "all" | "has_issues" | "no_issues" | "missing_image";
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -60,9 +64,15 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
   const [statusText, setStatusText] = useState("");
   const [loading, setLoading] = useState(true);
   const [approvingAll, setApprovingAll] = useState(false);
+  const [approvingFiltered, setApprovingFiltered] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [catalogSummary, setCatalogSummary] = useState<CatalogSummaryState>({});
   const [lastParserJob, setLastParserJob] = useState<ParserJobState | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("all");
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   // Deals state
   const [deals, setDeals] = useState<CatalogDeal[]>([]);
@@ -117,6 +127,53 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     const missingImage = items.filter((x) => !x.image_storage_path).length;
     return { total, approved, missingImage };
   }, [items]);
+
+  const categories = useMemo(
+    () => Array.from(new Set(items.map((item) => item.category).filter(Boolean))).sort(),
+    [items],
+  );
+
+  const filteredItems = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    return items.filter((item) => {
+      if (changeFilter !== "all" && (item.change_type ?? "new") !== changeFilter) {
+        return false;
+      }
+      if (approvalFilter === "pending" && item.approved) return false;
+      if (approvalFilter === "approved" && !item.approved) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (issueFilter === "has_issues" && (item.parse_issues ?? []).length === 0) return false;
+      if (issueFilter === "no_issues" && (item.parse_issues ?? []).length > 0) return false;
+      if (issueFilter === "missing_image" && item.image_storage_path) return false;
+      if (!query) return true;
+
+      const haystack = [
+        item.sku,
+        item.name,
+        item.upc ?? "",
+        item.pack ?? "",
+        item.category,
+        (item.parse_issues ?? []).join(" "),
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [approvalFilter, categoryFilter, changeFilter, issueFilter, items, productSearch]);
+
+  const filteredStats = useMemo(() => {
+    const pending = filteredItems.filter((item) => !item.approved).length;
+    return {
+      total: filteredItems.length,
+      pending,
+      approved: filteredItems.length - pending,
+    };
+  }, [filteredItems]);
+
+  const hasActiveProductFilters =
+    productSearch.trim() !== "" ||
+    changeFilter !== "all" ||
+    approvalFilter !== "all" ||
+    issueFilter !== "all" ||
+    categoryFilter !== "all";
 
   const parseSummary = catalogSummary.parse_summary ?? {};
   const isParserActive =
@@ -195,6 +252,41 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
     }
     setStatusText(`Approved ${body.updatedCount ?? 0} items`);
     await load();
+  }
+
+  async function approveFilteredItems() {
+    const itemIds = filteredItems.filter((item) => !item.approved).map((item) => item.id);
+    if (itemIds.length === 0) {
+      setStatusText("No pending visible items to approve");
+      return;
+    }
+
+    setApprovingFiltered(true);
+    const response = await fetch(`/api/admin/catalogs/${catalogId}/approve-items`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ itemIds }),
+    });
+    const body = await response.json().catch(() => ({}));
+    setApprovingFiltered(false);
+
+    if (!response.ok) {
+      setStatusText(body.error || "Approve filtered failed");
+      return;
+    }
+
+    setStatusText(`Approved ${body.updatedCount ?? itemIds.length} visible items`);
+    setItems((prev) =>
+      prev.map((item) => (itemIds.includes(item.id) ? { ...item, approved: true } : item)),
+    );
+  }
+
+  function clearProductFilters() {
+    setProductSearch("");
+    setChangeFilter("all");
+    setApprovalFilter("all");
+    setIssueFilter("all");
+    setCategoryFilter("all");
   }
 
   async function deleteCatalog() {
@@ -387,6 +479,13 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
         </button>
         <button
           className="button secondary"
+          onClick={approveFilteredItems}
+          disabled={approvingFiltered || activeTab !== "products" || filteredStats.pending === 0}
+        >
+          {approvingFiltered ? "Approving..." : `Approve Visible (${filteredStats.pending})`}
+        </button>
+        <button
+          className="button secondary"
           onClick={deleteCatalog}
           disabled={deleting}
           style={{ borderColor: "var(--red)", color: "var(--red)" }}
@@ -467,6 +566,84 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
       {/* === PRODUCTS TAB === */}
       {activeTab === "products" && (
         <>
+          <div className="card">
+            <div className="reviewFilters__header">
+              <div>
+                <h3 className="reviewFilters__title">Review Filters</h3>
+                <div className="muted" style={{ fontSize: 13 }}>
+                  Showing {filteredStats.total} of {items.length} items. {filteredStats.pending} visible pending approval.
+                </div>
+              </div>
+              <button className="button secondary" onClick={clearProductFilters} disabled={!hasActiveProductFilters}>
+                Clear Filters
+              </button>
+            </div>
+            <div className="reviewFilters__grid">
+              <div className="form-group">
+                <label className="form-label">Search</label>
+                <input
+                  className="input"
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  placeholder="SKU, name, UPC, pack, category"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Change</label>
+                <select
+                  className="input"
+                  value={changeFilter}
+                  onChange={(event) => setChangeFilter(event.target.value as ChangeFilter)}
+                >
+                  <option value="all">All changes</option>
+                  <option value="new">New</option>
+                  <option value="updated">Updated</option>
+                  <option value="unchanged">Unchanged</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Approval</label>
+                <select
+                  className="input"
+                  value={approvalFilter}
+                  onChange={(event) => setApprovalFilter(event.target.value as ApprovalFilter)}
+                >
+                  <option value="all">All approvals</option>
+                  <option value="pending">Pending only</option>
+                  <option value="approved">Approved only</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Issues</label>
+                <select
+                  className="input"
+                  value={issueFilter}
+                  onChange={(event) => setIssueFilter(event.target.value as IssueFilter)}
+                >
+                  <option value="all">All issue states</option>
+                  <option value="has_issues">Has parse issues</option>
+                  <option value="no_issues">No parse issues</option>
+                  <option value="missing_image">Missing image</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select
+                  className="input"
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                >
+                  <option value="all">All categories</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Items Table */}
           <div className="table-container">
             <div className="table-container__body">
@@ -486,7 +663,16 @@ export function CatalogReviewClient({ catalogId }: CatalogReviewClientProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={10}>
+                        <div className="empty-state" style={{ padding: 24 }}>
+                          <p className="empty-state__title">No products match these filters</p>
+                          <p className="empty-state__description">Adjust the filters above to continue review.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredItems.map((item) => (
                     <tr key={item.id}>
                       <td style={{ minWidth: 140 }}>
                         {item.image_url ? (
