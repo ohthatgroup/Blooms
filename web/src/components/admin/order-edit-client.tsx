@@ -35,6 +35,7 @@ interface OrderEditClientProps {
   initialItems: OrderEditItem[];
   catalogProducts: CatalogProductOption[];
   initialCsvColumns: unknown;
+  initialOrderStatus: string;
 }
 
 export function OrderEditClient({
@@ -43,12 +44,12 @@ export function OrderEditClient({
   initialItems,
   catalogProducts,
   initialCsvColumns,
+  initialOrderStatus,
 }: OrderEditClientProps) {
   const [customerName, setCustomerName] = useState(initialCustomerName);
   const [items, setItems] = useState(initialItems);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [search, setSearch] = useState("");
   const [browsing, setBrowsing] = useState(false);
   const [browseSearch, setBrowseSearch] = useState("");
   const [browseCategory, setBrowseCategory] = useState("ALL");
@@ -59,6 +60,8 @@ export function OrderEditClient({
     normalizeOrderCsvColumns(initialCsvColumns),
   );
   const [savingCsvColumns, setSavingCsvColumns] = useState(false);
+  const [orderStatus, setOrderStatus] = useState(initialOrderStatus);
+  const [resettingDraft, setResettingDraft] = useState(false);
 
   const productOrderBySku = useMemo(
     () =>
@@ -84,22 +87,6 @@ export function OrderEditClient({
       cases: filtered.reduce((sum, item) => sum + item.qty, 0),
     };
   }, [items]);
-
-  const addableProducts = useMemo(() => {
-    const currentSkus = new Set(items.map((item) => item.sku));
-    const query = search.trim().toLowerCase();
-    return catalogProducts
-      .filter((product) => !currentSkus.has(product.sku))
-      .filter((product) => {
-        if (!query) return true;
-        return (
-          product.sku.toLowerCase().includes(query) ||
-          product.name.toLowerCase().includes(query) ||
-          (product.upc ?? "").toLowerCase().includes(query)
-        );
-      })
-      .slice(0, 30);
-  }, [catalogProducts, items, search]);
 
   const browseCategories = useMemo(
     () => Array.from(new Set(catalogProducts.map((p) => p.category))),
@@ -138,7 +125,6 @@ export function OrderEditClient({
         note: "",
       },
     ]);
-    setSearch("");
   }
 
   function removeProduct(sku: string) {
@@ -197,6 +183,30 @@ export function OrderEditClient({
 
     setCsvColumns(normalizeOrderCsvColumns(body.order?.csv_columns));
     setMessage("CSV columns updated.");
+  }
+
+  async function resetToDraft() {
+    if (!window.confirm("Reset this order to draft so the customer can amend and resubmit it?")) {
+      return;
+    }
+
+    setResettingDraft(true);
+    setMessage("");
+    const response = await fetch(`/api/admin/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ order_status: "draft" }),
+    });
+    const body = await response.json().catch(() => ({}));
+    setResettingDraft(false);
+
+    if (!response.ok) {
+      setMessage(body.error || "Failed to reset order to draft");
+      return;
+    }
+
+    setOrderStatus(body.order?.order_status ?? "draft");
+    setMessage("Order reset to draft.");
   }
 
   function downloadCsv() {
@@ -352,7 +362,21 @@ export function OrderEditClient({
               {saving ? "Saving..." : "Save Order"}
             </button>
             <button className="button secondary" onClick={downloadCsv} disabled={totals.skus === 0}>
-              Submit
+              Download CSV
+            </button>
+            <button
+              className="button secondary"
+              onClick={saveCsvColumns}
+              disabled={savingCsvColumns || csvColumns.length === 0}
+            >
+              {savingCsvColumns ? "Saving CSV..." : "Save CSV Settings"}
+            </button>
+            <button
+              className="button secondary"
+              onClick={resetToDraft}
+              disabled={resettingDraft || orderStatus === "draft"}
+            >
+              {resettingDraft ? "Resetting..." : "Reset to Draft"}
             </button>
             <OrderDeleteButton orderId={orderId} redirectTo="/admin/orders" />
             {message && (
@@ -361,6 +385,24 @@ export function OrderEditClient({
                 {message}
               </span>
             )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">CSV Export Columns</label>
+            <div className="csv-column-grid">
+              {ORDER_CSV_COLUMNS.map((column) => (
+                <label key={column.key} className="csv-column-option">
+                  <input
+                    type="checkbox"
+                    checked={csvColumns.includes(column.key)}
+                    onChange={() => toggleCsvColumn(column.key)}
+                  />
+                  {column.label}
+                </label>
+              ))}
+            </div>
+            <span className="form-hint">
+              These columns are used by this order&apos;s CSV download.
+            </span>
           </div>
         </div>
       </div>
@@ -374,34 +416,6 @@ export function OrderEditClient({
         <div className="stat-card stat-card--green">
           <div className="stat-card__value">{totals.cases}</div>
           <div className="stat-card__label">Total Cases</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>CSV Export Columns</h3>
-        <div className="csv-column-grid">
-          {ORDER_CSV_COLUMNS.map((column) => (
-            <label key={column.key} className="csv-column-option">
-              <input
-                type="checkbox"
-                checked={csvColumns.includes(column.key)}
-                onChange={() => toggleCsvColumn(column.key)}
-              />
-              {column.label}
-            </label>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
-          <button
-            className="button secondary"
-            onClick={saveCsvColumns}
-            disabled={savingCsvColumns || csvColumns.length === 0}
-          >
-            {savingCsvColumns ? "Saving..." : "Save CSV Columns"}
-          </button>
-          <span className="form-hint">
-            These columns are used by this order&apos;s CSV download.
-          </span>
         </div>
       </div>
 

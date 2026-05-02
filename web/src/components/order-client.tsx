@@ -24,6 +24,7 @@ interface OrderClientProps {
   initialLiveOrder: {
     id: string;
     customer_name: string;
+    order_status?: string;
     items: Array<{ sku: string; qty: number; note?: string }>;
   } | null;
 }
@@ -40,6 +41,9 @@ export function OrderClient({
   const [activeTab, setActiveTab] = useState("ALL");
   const [liveOrderId, setLiveOrderId] = useState<string | null>(
     initialLiveOrder?.id ?? null,
+  );
+  const [orderStatus, setOrderStatus] = useState(
+    initialLiveOrder?.order_status ?? "draft",
   );
   const [customerName, setCustomerName] = useState(
     initialLiveOrder?.customer_name ?? linkCustomerName,
@@ -198,6 +202,7 @@ export function OrderClient({
     link.click();
     URL.revokeObjectURL(objectUrl);
     setMessage("Order saved and CSV downloaded.");
+    setOrderStatus("submitted");
     setShowReview(false);
   }, [customerName, orderItems, token]);
 
@@ -248,6 +253,7 @@ export function OrderClient({
       if (body.order_id && typeof body.order_id === "string") {
         setLiveOrderId(body.order_id);
       }
+      setOrderStatus("draft");
       lastSavedSigRef.current = sigAtCall;
       setLastSavedAt(body.updated_at ?? new Date().toISOString());
       setSaveState("saved");
@@ -329,6 +335,34 @@ export function OrderClient({
   const handleScannerClose = useCallback(() => {
     setShowScanner(false);
   }, []);
+
+  const resetToDraft = useCallback(async () => {
+    if (!liveOrderId) return;
+    setLoading(true);
+    setMessage("");
+    const response = await fetch("/api/public/orders/draft", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        token,
+        customer_name: customerName,
+        items: orderItems.map((x) => ({ sku: x.sku, qty: x.qty, note: x.note || undefined })),
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!response.ok) {
+      setMessage(body.error || "Failed to reset order to draft");
+      return;
+    }
+
+    if (body.order_id && typeof body.order_id === "string") {
+      setLiveOrderId(body.order_id);
+    }
+    setOrderStatus("draft");
+    setMessage("Order reset to draft. You can amend items and resubmit.");
+  }, [customerName, liveOrderId, orderItems, token]);
 
   return (
     <div className="container" style={{ paddingBottom: 90 }}>
@@ -559,6 +593,12 @@ export function OrderClient({
             <div className="muted" style={{ marginBottom: 10 }}>
               {totalSkus} products • {totalCases} total cases
             </div>
+            {orderStatus === "submitted" && (
+              <div className="badge badge--processing" style={{ marginBottom: 10 }}>
+                <span className="badge__dot" />
+                Submitted order. Reset to draft to amend and resubmit.
+              </div>
+            )}
             <table className="table">
               <thead>
                 <tr>
@@ -573,8 +613,26 @@ export function OrderClient({
                   <tr key={item.sku}>
                     <td>{item.sku}</td>
                     <td>{item.name}</td>
-                    <td>{item.qty}</td>
-                    <td className="muted">{item.note}</td>
+                    <td style={{ width: 110 }}>
+                      <input
+                        className="input"
+                        type="number"
+                        min={0}
+                        value={item.qty}
+                        onChange={(event) => setQty(item.sku, event.target.value, "input")}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        placeholder="Note..."
+                        value={item.note}
+                        maxLength={500}
+                        onChange={(event) =>
+                          setNotes((prev) => ({ ...prev, [item.sku]: event.target.value }))
+                        }
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -583,6 +641,11 @@ export function OrderClient({
               <button className="button secondary" onClick={() => setShowReview(false)}>
                 Close
               </button>
+              {orderStatus === "submitted" && (
+                <button className="button secondary" onClick={resetToDraft} disabled={loading}>
+                  Reset to Draft
+                </button>
+              )}
               <button className="button" onClick={downloadCsv} disabled={!canDownload || loading}>
                 {loading ? "Downloading..." : "Download CSV"}
               </button>

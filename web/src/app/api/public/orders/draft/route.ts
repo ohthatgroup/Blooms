@@ -101,6 +101,8 @@ export async function POST(request: Request) {
         customer_name: effectiveCustomerName,
         total_skus: totalSkus,
         total_cases: totalCases,
+        order_status: "draft",
+        csv_storage_path: null,
         updated_at: now,
       })
       .eq("id", liveOrder.id);
@@ -120,6 +122,8 @@ export async function POST(request: Request) {
         customer_name: effectiveCustomerName,
         total_skus: totalSkus,
         total_cases: totalCases,
+        order_status: "draft",
+        csv_storage_path: null,
         archived_at: null,
         updated_at: now,
       })

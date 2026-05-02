@@ -88,7 +88,7 @@ export default async function CustomerOrderPage({
 
   const { data: liveOrder } = await admin
     .from("orders")
-    .select("id,customer_name")
+    .select("id,customer_name,order_status")
     .eq("customer_link_id", link.id)
     .is("archived_at", null)
     .maybeSingle();
@@ -114,6 +114,7 @@ export default async function CustomerOrderPage({
           ? {
               id: liveOrder.id,
               customer_name: liveOrder.customer_name,
+              order_status: liveOrder.order_status ?? "draft",
               items: liveOrderItems,
             }
           : null

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth";
-import { patchOrderCsvColumnsSchema, patchOrderSchema } from "@/lib/validation";
+import {
+  patchOrderCsvColumnsSchema,
+  patchOrderSchema,
+  patchOrderStatusSchema,
+} from "@/lib/validation";
 import { buildOrderCsv, normalizeOrderCsvColumns } from "@/lib/catalog/csv";
 import { uploadOrderCsv } from "@/lib/storage";
 import { buildDealNoteMap } from "@/lib/deals/csv-note";
@@ -16,7 +20,7 @@ export async function GET(
   const { data: order, error: orderError } = await auth.admin
     .from("orders")
     .select(
-      "id,customer_name,catalog_id,customer_link_id,total_skus,total_cases,submitted_at,csv_storage_path,csv_columns",
+      "id,customer_name,catalog_id,customer_link_id,total_skus,total_cases,submitted_at,csv_storage_path,csv_columns,order_status",
     )
     .eq("id", id)
     .is("archived_at", null)
@@ -108,6 +112,27 @@ export async function PATCH(
 
   const { id } = await context.params;
   const payload = await request.json().catch(() => null);
+  const statusPatch = patchOrderStatusSchema.safeParse(payload);
+  if (statusPatch.success) {
+    const now = new Date().toISOString();
+    const { data, error } = await auth.admin
+      .from("orders")
+      .update({ order_status: "draft", csv_storage_path: null, updated_at: now })
+      .eq("id", id)
+      .is("archived_at", null)
+      .select("id,order_status,updated_at")
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json(
+        { error: "Failed to reset order to draft", details: error?.message },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ ok: true, order: data });
+  }
+
   const csvColumnsPatch = patchOrderCsvColumnsSchema.safeParse(payload);
   if (csvColumnsPatch.success) {
     const columns = normalizeOrderCsvColumns(csvColumnsPatch.data.csv_columns);
@@ -212,6 +237,7 @@ export async function PATCH(
       customer_name: parsed.data.customer_name,
       total_skus: totalSkus,
       total_cases: totalCases,
+      order_status: "submitted",
       submitted_at: now,
       updated_at: now,
     })

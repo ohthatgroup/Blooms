@@ -41,13 +41,14 @@ export async function GET(request: Request) {
       total_cases: number;
       updated_at: string | null;
       csv_columns: unknown;
+      order_status: string | null;
     }
   >();
 
   if (linkIds.length > 0) {
     const { data: activeOrders, error: orderError } = await auth.admin
       .from("orders")
-      .select("id,customer_link_id,total_skus,total_cases,updated_at,csv_columns")
+      .select("id,customer_link_id,total_skus,total_cases,updated_at,csv_columns,order_status")
       .in("customer_link_id", linkIds)
       .is("archived_at", null);
 
@@ -67,6 +68,7 @@ export async function GET(request: Request) {
           total_cases: order.total_cases ?? 0,
           updated_at: order.updated_at ?? null,
           csv_columns: order.csv_columns,
+          order_status: order.order_status ?? null,
         },
       ]),
     );
@@ -84,6 +86,7 @@ export async function GET(request: Request) {
       total_cases: activeOrder?.total_cases ?? 0,
       updated_at: activeOrder?.updated_at ?? null,
       csv_columns: activeOrder?.csv_columns ?? null,
+      order_status: activeOrder?.order_status ?? null,
     };
   });
 

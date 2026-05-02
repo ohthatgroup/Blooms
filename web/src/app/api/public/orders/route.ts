@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { enforcePublicRateLimit } from "@/lib/rate-limit";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { submitOrderSchema } from "@/lib/validation";
-import { buildOrderCsv } from "@/lib/catalog/csv";
+import { buildOrderCsv, normalizeOrderCsvColumns } from "@/lib/catalog/csv";
 import { uploadOrderCsv } from "@/lib/storage";
 import { buildDealNoteMap } from "@/lib/deals/csv-note";
 
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 
   const { data: liveOrder, error: liveOrderError } = await admin
     .from("orders")
-    .select("id")
+    .select("id,csv_columns")
     .eq("customer_link_id", link.id)
     .is("archived_at", null)
     .maybeSingle();
@@ -114,6 +114,7 @@ export async function POST(request: Request) {
         submitted_at: now,
         total_skus: totalSkus,
         total_cases: totalCases,
+        order_status: "submitted",
         updated_at: now,
       })
       .eq("id", liveOrder.id);
@@ -134,6 +135,7 @@ export async function POST(request: Request) {
         submitted_at: now,
         total_skus: totalSkus,
         total_cases: totalCases,
+        order_status: "submitted",
         archived_at: null,
         updated_at: now,
       })
@@ -179,6 +181,7 @@ export async function POST(request: Request) {
 
   const { csv, fileName } = buildOrderCsv({
     customerName: parsed.data.customer_name,
+    columns: normalizeOrderCsvColumns(liveOrder?.csv_columns),
     items: orderItems.map((item) => ({
       sku: item.sku,
       name: item.product_name,

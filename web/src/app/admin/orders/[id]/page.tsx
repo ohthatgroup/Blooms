@@ -13,7 +13,7 @@ export default async function AdminOrderEditPage({
 
   const { data: order } = await admin
     .from("orders")
-    .select("id,customer_name,catalog_id,csv_columns")
+    .select("id,customer_name,catalog_id,csv_columns,order_status")
     .eq("id", id)
     .is("archived_at", null)
     .single();
@@ -48,6 +48,7 @@ export default async function AdminOrderEditPage({
         orderId={order.id}
         initialCustomerName={order.customer_name}
         initialCsvColumns={order.csv_columns}
+        initialOrderStatus={order.order_status ?? "draft"}
         initialItems={(() => {
           const catalogSkus = new Set((catalogProducts ?? []).map((p) => p.sku));
           return (items ?? []).map((item) => {

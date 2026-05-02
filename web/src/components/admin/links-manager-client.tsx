@@ -32,6 +32,7 @@ interface LinkRow {
   total_cases?: number;
   updated_at?: string | null;
   csv_columns?: unknown;
+  order_status?: string | null;
 }
 
 interface LinksManagerClientProps {
@@ -276,6 +277,24 @@ export function LinksManagerClient({
     await loadLinks();
   }
 
+  async function resetOrderToDraft(orderId: string) {
+    if (!window.confirm("Reset this order to draft so the customer can amend and resubmit it?")) {
+      return;
+    }
+    const response = await fetch(`/api/admin/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ order_status: "draft" }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(body.error || "Failed to reset order to draft");
+      return;
+    }
+    setMessage("Order reset to draft");
+    await loadLinks();
+  }
+
   const renderStatus = (link: LinkRow) => (
     <div className="orders-status">
       <span className={`badge badge--${link.active ? "active" : "inactive"}`}>
@@ -284,7 +303,11 @@ export function LinksManagerClient({
       </span>
       <span className={`badge badge--${link.has_order ? "processing" : "draft"}`}>
         <span className="badge__dot" />
-        {link.has_order ? "Order started" : "No order yet"}
+        {link.has_order
+          ? link.order_status === "submitted"
+            ? "Submitted"
+            : "Draft"
+          : "No order yet"}
       </span>
     </div>
   );
@@ -441,6 +464,14 @@ export function LinksManagerClient({
                       void loadLinks();
                     }}
                   />
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => void resetOrderToDraft(link.order_id!)}
+                    disabled={link.order_status === "draft"}
+                  >
+                    Reset to draft
+                  </button>
                 </>
               ) : null}
               <button

@@ -192,6 +192,10 @@ export const patchOrderCsvColumnsSchema = z.object({
   csv_columns: z.array(orderCsvColumnSchema).min(1),
 });
 
+export const patchOrderStatusSchema = z.object({
+  order_status: z.literal("draft"),
+});
+
 export const importCatalogSchema = z.object({
   version_label: z.string().min(1).max(120),
   catalog_id: z.string().uuid().optional(),
